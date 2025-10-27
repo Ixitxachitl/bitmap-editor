@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bitmap Emote Editor — Clean Layout</title>
+  <style>
+    :root{
+      --bg:#0f1115;--panel:#161a23;--panel-2:#1e2430;--text:#e5e9f0;--muted:#9aa4b2;--accent:#7c90ff;--grid:#2a3140;--on:#e5e9f0;--off:#0f1115;
+      --danger:#ff6b6b;--ok:#22c55e;--warn:#f59e0b;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:linear-gradient(180deg,#0f1115,#121624 60%);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,Arial,sans-serif}
+    header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:var(--panel);border-bottom:1px solid #232a3a;gap:10px;flex-wrap:wrap}
+    h1{font-size:18px;margin:0;font-weight:700;letter-spacing:.2px}
+    .wrap{display:grid;grid-template-columns: 360px 1fr;gap:14px;padding:14px}
+    .col{display:grid;gap:14px;align-content:start}
+    .card{background:var(--panel);border:1px solid #222a3a;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.25);}
+    .card h2{font-size:14px;font-weight:700;margin:0;padding:12px 14px;border-bottom:1px solid #222a3a;color:#cbd5e1;display:flex;align-items:center;gap:8px}
+    .card .body{padding:12px 14px}
+    label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px}
+    input[type="number"], input[type="text"], select, textarea{width:100%;padding:10px;border-radius:10px;border:1px solid #243048;background:var(--panel-2);color:var(--text);font-family:inherit;font-size:13px}
+    textarea{min-height:120px;resize:vertical}
+    .controls{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .btn{appearance:none;border:1px solid #2b3650;background: #202635;color:var(--text);padding:8px 12px;border-radius:12px;font-weight:600;font-size:12px;cursor:pointer}
+    .btn:hover{filter:brightness(1.15)}
+    .btn.primary{background:linear-gradient(180deg,#6378ff,#5a6df8);border-color:#5461de;color:white}
+    .btn.ghost{background:transparent;border-color:#303a57}
+    .btn.warn{background:#3b2a12;border-color:#5d3d12;color:#ffd68a}
+    .btn.danger{background:#3c1c1c;border-color:#5b2323;color:#ffb4b4}
+    .gridWrap{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
+    canvas{background:var(--off);border:1px solid #252c3e;border-radius:12px;image-rendering:pixelated;cursor:crosshair}
+    .legend{font-size:12px;color:var(--muted)}
+    .pill{display:inline-flex;align-items:center;gap:8px;border:1px dashed #334057;padding:8px 10px;border-radius:12px;background:#121827;color:#aab3c2;font-size:12px}
+    .switch{display:inline-flex;align-items:center;gap:6px}
+    .footer{padding:10px 14px;border-top:1px solid #222a3a;color:#9aa4b2;font-size:12px}
+    .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;}
+    /* nicer import layout */
+    .import-grid{display:grid;grid-template-columns:1fr;gap:10px}
+
+    @media (max-width: 980px){
+      .wrap{grid-template-columns:1fr}
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🧩 Bitmap Emote Editor</h1>
+    <div class="row">
+      <button class="btn" id="newBtn">New</button>
+      <button class="btn" id="clearBtn">Clear</button>
+      <button class="btn warn" id="invertBtn">Invert</button>
+      <button class="btn" id="flipHBtn">Flip H</button>
+      <button class="btn" id="flipVBtn">Flip V</button>
+      <button class="btn" id="rotLBtn">Rotate ⟲</button>
+      <button class="btn" id="rotRBtn">Rotate ⟳</button>
+      <button class="btn" id="undoBtn">Undo</button>
+      <button class="btn" id="redoBtn">Redo</button>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <!-- Left column: settings + import separated -->
+    <div class="col">
+      <section class="card">
+        <h2>Canvas & Export</h2>
+        <div class="body">
+          <div class="controls">
+            <div>
+              <label>Width (px)</label>
+              <input type="number" id="w" value="24" min="1" max="128"/>
+            </div>
+            <div>
+              <label>Height (px)</label>
+              <input type="number" id="h" value="24" min="1" max="128"/>
+            </div>
+            <div>
+              <label>Zoom</label>
+              <input type="range" id="zoom" min="8" max="32" value="16"/>
+            </div>
+            <div>
+              <label>Brush</label>
+              <select id="brush">
+                <option value="draw">Draw</option>
+                <option value="erase">Erase</option>
+                <option value="line">Line</option>
+                <option value="rect">Rect</option>
+                <option value="circle">Circle</option>
+                <option value="disc">Filled Circle</option>
+                <option value="fill">Flood Fill</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="height:8px"></div>
+          <div class="row">
+            <span class="pill"><input id="gridToggle" type="checkbox" checked> <span>Show grid</span></span>
+            <span class="pill"><input id="dragToggle" type="checkbox" checked> <span>Drag to draw</span></span>
+          </div>
+
+          <div style="height:12px"></div>
+          <div class="row">
+            <input id="symbol" type="text" placeholder="Unicode (e.g. \u2764 or 😀)"/>
+          </div>
+
+          <div style="height:12px"></div>
+          <div class="row">
+            <input id="name" class="mono" type="text" placeholder="C array name (e.g. heart)"/>
+          </div>
+
+          <div style="height:12px"></div>
+          <div class="row">
+            <button id="exportBtn" class="btn primary">Export C Array</button>
+            <button id="copyBtn" class="btn">Copy</button>
+            <button id="downloadBtn" class="btn">Download .h</button>
+          </div>
+
+          <div style="height:12px"></div>
+          <details>
+            <summary style="cursor:pointer;color:#cbd5e1">Packing Options</summary>
+            <div class="body" style="padding:8px 0 0">
+              <label>Bits per byte packing</label>
+              <!-- Default to LSB first -->
+              <select id="bitOrder">
+                <option value="lsb0" selected>Row-major, LSB first (bit0=leftmost)</option>
+                <option value="msb0">Row-major, MSB first (bit7=leftmost)</option>
+              </select>
+              <div style="height:8px"></div>
+              <div class="row">
+                <span class="pill"><input id="padRows" type="checkbox" checked> <span>Pad each row to full bytes</span></span>
+                <span class="pill"><input id="progmem" type="checkbox" checked> <span>Add <code class="mono">PROGMEM</code></span></span>
+              </div>
+            </div>
+          </details>
+
+          <div style="height:12px"></div>
+          <label>Output</label>
+          <textarea id="out" class="mono" spellcheck="false" placeholder="// exported C array will appear here"></textarea>
+
+          <div class="legend">
+            Tip: Default packing is <strong>LSB first</strong>. Switch to MSB if your firmware expects it.
+          </div>
+        </div>
+        <div class="footer">
+          Made for quick creation of 1‑bit emoji/emotes.
+        </div>
+      </section>
+
+      <!-- NEW: Import is its own card, separated from the editor UI -->
+      <section class="card">
+        <h2>Import from C Array</h2>
+        <div class="body import-grid">
+          <div>
+            <label>Paste array (comma/space/newline separated hex like <code>0x00, 0x1C, ...</code>)</label>
+            <textarea id="in" class="mono" placeholder="0x00, 0x1C, 0x00, 0x00, ..."></textarea>
+          </div>
+          <div class="controls">
+            <div>
+              <label>Array Width</label>
+              <input type="number" id="iw" min="1" max="256" placeholder="e.g. 24"/>
+            </div>
+            <div>
+              <label>Array Height</label>
+              <input type="number" id="ih" min="1" max="256" placeholder="e.g. 24"/>
+            </div>
+            <div>
+              <label>Bit Order</label>
+              <select id="ibitOrder">
+                <!-- Default to LSB first here as well -->
+                <option value="lsb0" selected>Row-major, LSB first</option>
+                <option value="msb0">Row-major, MSB first</option>
+              </select>
+            </div>
+            <div>
+              <label>Row Padding</label>
+              <select id="ipadRows">
+                <option value="yes">Each row padded to full byte</option>
+                <option value="no">Continuous stream (no row pad)</option>
+              </select>
+            </div>
+          </div>
+          <div class="row">
+            <button id="importBtn" class="btn">Import</button>
+          </div>
+          <div class="legend">Import is now separate from the live editor to keep things tidy. Defaults to <strong>LSB first</strong>.</div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Right column: editor + preview only -->
+    <section class="card">
+      <h2>Editor</h2>
+      <div class="body">
+        <div class="gridWrap">
+          <div>
+            <canvas id="grid" width="384" height="384"></canvas>
+            <div style="height:10px"></div>
+            <div class="legend">Left‑click: draw • Right‑click: erase • Hold Shift: straight line • Ctrl/Cmd+Z: undo • Ctrl/Cmd+Y or Shift+Ctrl/Cmd+Z: redo</div>
+          </div>
+          <div>
+            <details open>
+              <summary style="cursor:pointer;color:#cbd5e1">Preview</summary>
+              <div class="body" style="padding:8px 0 0">
+                <canvas id="preview" width="120" height="120" style="border:1px dashed #2c3346;border-radius:10px"></canvas>
+              </div>
+            </details>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    // --- Model ---
+    const state = {
+      w: 24, h: 24,
+      pixels: [],
+      zoom: 16,
+      brush: 'draw',
+      gridLines: true,
+      dragToDraw: true,
+    };
+
+    const $ = sel => document.querySelector(sel);
+    const $$ = sel => Array.from(document.querySelectorAll(sel));
+
+    // Elements
+    const grid = $('#grid');
+    const g = grid.getContext('2d');
+    const preview = $('#preview');
+    const gp = preview.getContext('2d');
+
+    const wIn = $('#w');
+    const hIn = $('#h');
+    const zoomIn = $('#zoom');
+    const brushSel = $('#brush');
+    const gridToggle = $('#gridToggle');
+    const dragToggle = $('#dragToggle');
+
+    const out = $('#out');
+    const nameIn = $('#name');
+    const symbolIn = $('#symbol');
+
+    const bitOrder = $('#bitOrder');
+    const padRows = $('#padRows');
+    const progmem = $('#progmem');
+
+    const importArea = $('#in');
+    const iw = $('#iw');
+    const ih = $('#ih');
+    const ibitOrder = $('#ibitOrder');
+    const ipadRows = $('#ipadRows');
+
+    // History stacks
+    const undoStack = [];
+    const redoStack = [];
+    const MAX_HISTORY = 100;
+
+    function snapshot(){
+      return { w: state.w, h: state.h, pixels: state.pixels.slice() };
+    }
+    function pushHistory(){
+      undoStack.push(snapshot());
+      if (undoStack.length > MAX_HISTORY) undoStack.shift();
+      // any new action invalidates redo chain
+      redoStack.length = 0;
+    }
+    function restore(snap){
+      // restore without creating a new history node
+      setSize(snap.w, snap.h, /*noDraw*/ true);
+      state.pixels = snap.pixels.slice();
+      draw();
+    }
+    function undo(){
+      if(!undoStack.length) { toast('Nothing to undo'); return; }
+      const current = snapshot();
+      const prev = undoStack.pop();
+      redoStack.push(current);
+      restore(prev);
+    }
+    function redo(){
+      if(!redoStack.length) { toast('Nothing to redo'); return; }
+      const current = snapshot();
+      const next = redoStack.pop();
+      undoStack.push(current);
+      restore(next);
+    }
+
+    // Buttons
+    $('#newBtn').onclick = () => { pushHistory(); setSize(24,24); clearPixels(); draw(); };
+    $('#clearBtn').onclick = () => { pushHistory(); clearPixels(); draw(); };
+    $('#invertBtn').onclick = () => { pushHistory(); mapPixels(v=>v?0:1); draw(); };
+    $('#flipHBtn').onclick = () => { pushHistory(); flip(true,false); draw(); };
+    $('#flipVBtn').onclick = () => { pushHistory(); flip(false,true); draw(); };
+    $('#rotLBtn').onclick = () => { pushHistory(); rotate(-90); draw(); };
+    $('#rotRBtn').onclick = () => { pushHistory(); rotate(90); draw(); };
+    $('#undoBtn').onclick = () => undo();
+    $('#redoBtn').onclick = () => redo();
+
+    $('#exportBtn').onclick = () => {
+      out.value = makeCArray();
+      out.scrollTop = 0;
+    };
+    $('#copyBtn').onclick = async () => {
+      if(!out.value) out.value = makeCArray();
+      await navigator.clipboard.writeText(out.value);
+      toast('Copied to clipboard');
+    };
+    $('#downloadBtn').onclick = () => {
+      const txt = out.value || makeCArray();
+      const nm = (nameIn.value||'emote') + '.h';
+      const blob = new Blob([txt], {type:'text/plain'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = nm;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    };
+    $('#importBtn').onclick = () => { pushHistory(); importFromHex(); };
+
+    // Inputs
+    wIn.oninput = () => { pushHistory(); setSize(+wIn.value, state.h); };
+    hIn.oninput = () => { pushHistory(); setSize(state.w, +hIn.value); };
+    zoomIn.oninput = () => { state.zoom = +zoomIn.value; draw(); };
+    brushSel.oninput = () => state.brush = brushSel.value;
+    gridToggle.oninput = () => { state.gridLines = gridToggle.checked; draw(); };
+    dragToggle.oninput = () => { state.dragToDraw = dragToggle.checked; };
+
+    // Keyboard shortcuts (Undo/Redo)
+    window.addEventListener('keydown', (e)=>{
+      const key = e.key.toLowerCase();
+      const mod = e.ctrlKey || e.metaKey;
+      if(mod && key === 'z' && !e.shiftKey){ e.preventDefault(); undo(); }
+      else if( (mod && key === 'y') || (mod && key === 'z' && e.shiftKey) ) { e.preventDefault(); redo(); }
+    });
+
+    // init
+    setSize(24,24); clearPixels(); draw();
+
+    // --- Drawing helpers ---
+    function setSize(w,h,noDraw=false){
+      state.w = Math.max(1, Math.min(128, w|0));
+      state.h = Math.max(1, Math.min(128, h|0));
+      wIn.value = state.w; hIn.value = state.h;
+      resizeCanvas();
+      // keep data, cropping or padding as needed
+      const next = new Array(state.w*state.h).fill(0);
+      for(let y=0;y<Math.min(state.h, pixelsH());y++){
+        for(let x=0;x<Math.min(state.w, pixelsW());x++){
+          next[y*state.w + x] = state.pixels[y*pixelsW()+x]||0;
+        }
+      }
+      state.pixels = next;
+      if(!noDraw) draw();
+    }
+    function pixelsW(){ return state._pw || state.w; }
+    function pixelsH(){ return state._ph || state.h; }
+
+    function clearPixels(){ state.pixels = new Array(state.w*state.h).fill(0); }
+    function mapPixels(fn){ state.pixels = state.pixels.map(fn); }
+
+    function flip(h,v){
+      const out = new Array(state.w*state.h).fill(0);
+      for(let y=0;y<state.h;y++){
+        for(let x=0;x<state.w;x++){
+          const sx = h ? (state.w-1-x) : x;
+          const sy = v ? (state.h-1-y) : y;
+          out[y*state.w+x] = state.pixels[sy*state.w+sx];
+        }
+      }
+      state.pixels = out;
+    }
+
+    function rotate(deg){
+      const times = ((deg%360)+360)%360/90|0; // 0..3
+      for(let t=0;t<times;t++){
+        const out = new Array(state.w*state.h).fill(0);
+        const W=state.w, H=state.h;
+        for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+          const nx = H-1-y, ny = x;
+          out[ny*H + nx] = state.pixels[y*W + x];
+        }
+        state.pixels = out; state.w = H; state.h = W; wIn.value=state.w; hIn.value=state.h; resizeCanvas();
+      }
+    }
+
+    function resizeCanvas(){
+      grid.width = state.w*state.zoom; grid.height = state.h*state.zoom;
+    }
+
+    function draw(){
+      const z = state.zoom;
+      g.fillStyle = '#0b0e16';
+      g.fillRect(0,0,grid.width,grid.height);
+      for(let y=0;y<state.h;y++){
+        for(let x=0;x<state.w;x++){
+          const v = state.pixels[y*state.w+x];
+          g.fillStyle = v? 'white':'#0f1115';
+          g.fillRect(x*z, y*z, z, z);
+        }
+      }
+      if(state.gridLines){
+        g.strokeStyle = '#2b3245'; g.lineWidth = 1; g.beginPath();
+        for(let x=0;x<=state.w;x++){ g.moveTo(x*z+0.5,0); g.lineTo(x*z+0.5,grid.height); }
+        for(let y=0;y<=state.h;y++){ g.moveTo(0,y*z+0.5); g.lineTo(grid.width,y*z+0.5); }
+        g.stroke();
+      }
+      // preview
+      const P = Math.max(1, Math.floor(120 / Math.max(state.w,state.h)));
+      preview.width = state.w*P; preview.height = state.h*P;
+      gp.fillStyle = '#0f1115'; gp.fillRect(0,0,preview.width,preview.height);
+      for(let y=0;y<state.h;y++) for(let x=0;x<state.w;x++){
+        gp.fillStyle = state.pixels[y*state.w+x]? '#e5e9f0':'#0f1115';
+        gp.fillRect(x*P,y*P,P,P);
+      }
+    }
+
+    // --- Mouse interactions ---
+    let drawing = false, startPt=null, activeMode=null, shapeBase=null; // activeMode tracks right-click erase, etc.
+    grid.addEventListener('contextmenu', e=>e.preventDefault());
+
+    grid.addEventListener('mousedown', (e)=>{
+      const {x,y} = eventToCell(e);
+      activeMode = (e.button===2) ? 'erase' : state.brush;   // remember button mode
+
+      if(['line','rect','circle','disc'].includes(activeMode)){
+        startPt = {x,y,mode: activeMode};
+        shapeBase = state.pixels.slice();
+        pushHistory(); // one history entry for the whole gesture
+        drawing = true;
+        return;
+      }
+
+      // freehand or erase/fill single click
+      pushHistory();
+      drawing = state.dragToDraw;
+      applyBrush(x,y, activeMode === 'erase' ? 'erase' : 'draw');
+      draw();
+    });
+
+    grid.addEventListener('mousemove', (e)=>{
+      if(!drawing) return;
+      const {x,y} = eventToCell(e);
+
+      if(startPt && ['line','rect','circle','disc'].includes(startPt.mode)){
+        // rubber-band by restoring snapshot then committing the shape
+        state.pixels = shapeBase.slice();
+        const val = (activeMode === 'erase') ? 0 : 1;
+        if(startPt.mode==='rect' || startPt.mode==='line'){
+          strokeShape(startPt,x,y,startPt.mode==='rect', /*commit=*/true, /*val=*/val);
+        }else{
+          strokeCircle(startPt,x,y, startPt.mode==='disc', /*commit=*/true, /*val=*/val);
+        }
+        draw();
+        return;
+      }
+
+      // freehand
+      applyBrush(x,y, activeMode === 'erase' ? 'erase' : 'draw');
+      draw();
+    });
+
+    window.addEventListener('mouseup', (e)=>{
+      startPt=null; drawing=false; activeMode=null; shapeBase=null;
+    });
+
+    function eventToCell(e){
+      const r = grid.getBoundingClientRect();
+      const x = Math.min(state.w-1, Math.max(0, ((e.clientX - r.left)/state.zoom)|0));
+      const y = Math.min(state.h-1, Math.max(0, ((e.clientY - r.top)/state.zoom)|0));
+      return {x,y};
+    }
+
+    function setPx(x,y,v){ if(x<0||y<0||x>=state.w||y>=state.h) return; state.pixels[y*state.w+x]=v; }
+    function getPx(x,y){ if(x<0||y<0||x>=state.w||y>=state.h) return 0; return state.pixels[y*state.w+x]|0; }
+
+    function applyBrush(x,y,mode){
+      const b = state.brush;
+      if(b==='fill') return floodFill(x,y, mode==='erase'?0:1);
+      setPx(x,y, mode==='erase'?0:1);
+    }
+
+    // Draw rectangle/line (with commit + val support)
+    function strokeShape(a,bx,by, isRect, commit=false, val=1){
+      if(isRect){
+        const x0=Math.min(a.x,bx), x1=Math.max(a.x,bx), y0=Math.min(a.y,by), y1=Math.max(a.y,by);
+        for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++) if(commit) setPx(x,y,val); else { g.fillStyle='white'; g.fillRect(x*state.zoom,y*state.zoom,state.zoom,state.zoom); }
+        return;
+      }
+      // line (Bresenham)
+      let x0=a.x,y0=a.y,x1=bx,y1=by; const dx=Math.abs(x1-x0), dy=-Math.abs(y1-y0); let sx=x0<x1?1:-1, sy=y0<y1?1:-1, err=dx+dy;
+      while(true){ if(commit) setPx(x0,y0,val); else { g.fillStyle='white'; g.fillRect(x0*state.zoom,y0*state.zoom,state.zoom,state.zoom);} if(x0===x1 && y0===y1) break; const e2=2*err; if(e2>=dy){err+=dy;x0+=sx;} if(e2<=dx){err+=dx;y0+=sy;} }
+    }
+
+    function floodFill(x,y,val){
+      const target = getPx(x,y); if(target===val) return; const q=[[x,y]]; const W=state.w,H=state.h;
+      while(q.length){ const [cx,cy]=q.pop(); if(cx<0||cy<0||cx>=W||cy>=H) continue; if(getPx(cx,cy)!==target) continue; setPx(cx,cy,val); q.push([cx+1,cy],[cx-1,cy],[cx,cy+1],[cx,cy-1]); }
+      draw();
+    }
+
+    // --- Circles ---
+    // Pixel-accurate circle/disc that works for odd and even sizes.
+    // We sample at pixel centers (x+0.5,y+0.5) and place the circle center
+    // at the center of the inclusive square box. For even side lengths the
+    // center lies between pixels, which preserves symmetry.
+    function strokeCircle(a, bx, by, filled=false, commit=false, val=1){
+      // Build inclusive bounding square
+      let x0 = Math.min(a.x, bx), x1 = Math.max(a.x, bx);
+      let y0 = Math.min(a.y, by), y1 = Math.max(a.y, by);
+      let w = (x1 - x0 + 1), h = (y1 - y0 + 1);
+      const side = Math.max(w, h);
+      x1 = x0 + side - 1;
+      y1 = y0 + side - 1;
+
+      // Floating-point center and radius (handles even/odd uniformly)
+      const cx = x0 + side / 2;   // may be .5 for odd side, integer for even side
+      const cy = y0 + side / 2;
+      const R  = side / 2;
+
+      const R2 = R*R;
+      const outlineLo2 = (R - 0.5)*(R - 0.5); // 1px ring thickness
+      const outlineHi2 = (R + 0.5)*(R + 0.5);
+
+      for(let y=y0; y<=y1; y++){
+        for(let x=x0; x<=x1; x++){
+          const dx = (x + 0.5) - cx;
+          const dy = (y + 0.5) - cy;
+          const d2 = dx*dx + dy*dy;
+          if (filled) {
+            if (d2 <= R2 + 1e-9) plotCell(x, y, commit, val);
+          } else {
+            if (d2 >= outlineLo2 && d2 <= outlineHi2) plotCell(x, y, commit, val);
+          }
+        }
+      }
+    }
+
+    function plotCell(x, y, commit, val){
+      if(commit){
+        setPx(x,y,val?1:0);
+      }else{
+        g.fillStyle = val ? 'white' : '#0f1115';
+        g.fillRect(x*state.zoom, y*state.zoom, state.zoom, state.zoom);
+      }
+    }
+
+    // --- Import/Export ---
+    function parseHexInput(str){
+      const bytes=[]; str.replace(/0x[0-9a-fA-F]{1,2}|\b\d+\b/g, m=>{ bytes.push(Number(m.startsWith('0x')?m:('0x'+(+m).toString(16)))); });
+      return bytes;
+    }
+
+    function importFromHex(){
+      const bytes = parseHexInput(importArea.value);
+      const W = +iw.value||state.w; const H = +ih.value||state.h;
+      setSize(W,H); clearPixels();
+      const order = ibitOrder.value; const pad = ipadRows.value==='yes';
+      let idx=0;
+      for(let y=0;y<H;y++){
+        for(let x=0;x<W;x++){
+          const bitIndex = pad ? x%8 : ((y*W+x)%8);
+          if(bitIndex===0){ var b = bytes[idx++]||0; }
+          const bit = (order==='msb0') ? ((b & (0x80>>bitIndex))!==0) : ((b & (1<<bitIndex))!==0);
+          setPx(x,y, bit?1:0);
+        }
+        if(pad){ const rem = W%8; if(rem!==0) idx += (8-rem)/8; }
+      }
+      draw(); toast('Imported '+bytes.length+' byte(s)');
+    }
+
+    // Default packing order changed to LSB first
+    function packBytes(order='lsb0', pad=true){
+      const W=state.w,H=state.h; const bytes=[]; let cur=0, count=0;
+      for(let y=0;y<H;y++){
+        for(let x=0;x<W;x++){
+          const bit = getPx(x,y)?1:0;
+          if(order==='msb0'){ cur = (cur<<1) | bit; }
+          else { cur |= (bit<<count); }
+          count++;
+          if(count===8){ bytes.push(order==='msb0'?cur:cur&0xFF); cur=0; count=0; }
+        }
+        if(pad && count!==0){ // pad remaining bits with 0
+          if(order==='msb0'){ cur <<= (8-count); }
+          bytes.push(cur&0xFF); cur=0; count=0; }
+      }
+      if(!pad && count!==0){ bytes.push(cur&0xFF); }
+      return bytes;
+    }
+
+    function makeCArray(){
+      const nm = (nameIn.value||'emote').replace(/\W+/g,'_');
+      const sym = symbolIn.value||'';
+      const order = bitOrder.value; const pad = padRows.checked;
+      const bytes = packBytes(order,pad);
+      const hex = bytes.map(b=> '0x'+b.toString(16).toUpperCase().padStart(2,'0')).join(', ');
+      const W=state.w,H=state.h;
+      const hdr = `const unsigned char ${nm}[] ${progmem.checked?'PROGMEM ':''}= {\n    ${hex}\n};\n\nconst int ${nm}_width = ${W};\nconst int ${nm}_height = ${H};\n`;
+      const emoteLine = sym? `\n// Add to your emote table:\n// { "${sym}", ${nm}, ${nm}_width, ${nm}_height },\n` : '';
+      return hdr + emoteLine;
+    }
+
+    // --- tiny toast ---
+    function toast(msg){
+      const t=document.createElement('div');
+      t.textContent=msg; t.style.position='fixed'; t.style.bottom='16px'; t.style.right='16px'; t.style.background='#1f2534'; t.style.border='1px solid #2e3952'; t.style.padding='10px 12px'; t.style.borderRadius='10px'; t.style.color='#d3dbeb'; t.style.boxShadow='0 10px 30px rgba(0,0,0,.25)'; t.style.zIndex=9999;
+      document.body.appendChild(t); setTimeout(()=>{ t.style.transition='all .3s ease'; t.style.opacity='0'; t.style.transform='translateY(8px)'; setTimeout(()=>t.remove(),300); }, 1200);
+    }
+  </script>
+</body>
+</html>
