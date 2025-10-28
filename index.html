@@ -322,7 +322,7 @@
     // Inputs
     wIn.oninput = () => { pushHistory(); setSize(+wIn.value, state.h); };
     hIn.oninput = () => { pushHistory(); setSize(state.w, +hIn.value); };
-    zoomIn.oninput = () => { state.zoom = +zoomIn.value; draw(); };
+    zoomIn.oninput = () => { state.zoom = +zoomIn.value; resizeCanvas(); draw(); };
     brushSel.oninput = () => state.brush = brushSel.value;
     gridToggle.oninput = () => { state.gridLines = gridToggle.checked; draw(); };
     dragToggle.oninput = () => { state.dragToDraw = dragToggle.checked; };
