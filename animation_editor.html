@@ -287,7 +287,8 @@
       tool: 'draw',
       playing: false,
       playInterval: null,
-      speed: 300
+      speed: 300,
+      staticIcons: [] // Non-animation images like expIcon
     };
     
     // History
@@ -1192,6 +1193,16 @@
     }
     
     function generateOutput() {
+      // Filter to only animations with actual content (not just 1 empty frame)
+      const activeAnims = state.animations.filter(anim => {
+        if (anim.frames.length > 1) return true;
+        if (anim.frames.length === 1) {
+          // Check if frame has any pixels
+          return anim.frames[0].some(p => p);
+        }
+        return false;
+      });
+      
       let out = `#pragma once
 
 #include "configuration.h"
@@ -1210,16 +1221,31 @@
 // Frame counts per animation
 `;
       
-      // Frame count defines
-      state.animations.forEach(a => {
+      // Frame count defines (only for active animations)
+      activeAnims.forEach(a => {
         const defName = a.name.replace(/^pet/, 'PET_').replace(/([A-Z])/g, '_$1').toUpperCase().replace(/__/g, '_') + '_FRAMES';
         out += `#define ${defName} ${a.frames.length}\n`;
       });
       
       out += '\n';
       
-      // Frame data
-      state.animations.forEach(anim => {
+      // Static icons first (preserved from import)
+      if (state.staticIcons && state.staticIcons.length > 0) {
+        out += `// ============================================================================\n`;
+        out += `// STATIC ICONS\n`;
+        out += `// ============================================================================\n\n`;
+        
+        state.staticIcons.forEach(icon => {
+          const hex = icon.bytes.map(b => '0x' + b.toString(16).toUpperCase().padStart(2, '0')).join(', ');
+          if (icon.comment) {
+            out += `// ${icon.name} - ${icon.comment}\n`;
+          }
+          out += `const uint8_t ${icon.name}[] PROGMEM = {${hex}};\n\n`;
+        });
+      }
+      
+      // Frame data (only for active animations)
+      activeAnims.forEach(anim => {
         out += `// ============================================================================\n`;
         out += `// ${anim.name.toUpperCase()} - ${anim.comment}\n`;
         out += `// ============================================================================\n\n`;
@@ -1234,15 +1260,22 @@
         });
       });
       
-      // Frame arrays
+      // Frame arrays (only for active animations)
       out += `// ============================================================================\n`;
       out += `// FRAME ARRAYS\n`;
       out += `// ============================================================================\n\n`;
       
-      state.animations.forEach(anim => {
+      activeAnims.forEach(anim => {
         const frameNames = anim.frames.map((_, i) => `${anim.name}${i + 1}`).join(', ');
         out += `const uint8_t *const ${anim.name}Frames[] PROGMEM = {${frameNames}};\n`;
       });
+      
+      // Animation count
+      out += `\n// Total animations: ${activeAnims.length}`;
+      if (state.staticIcons && state.staticIcons.length > 0) {
+        out += `, Static icons: ${state.staticIcons.length}`;
+      }
+      out += `\n#define PET_ANIMATION_COUNT ${activeAnims.length}\n`;
       
       out += '\n#endif // !MESHTASTIC_EXCLUDE_PET\n';
       
@@ -1292,17 +1325,98 @@
       $('#globalW').value = state.w;
       $('#globalH').value = state.h;
       
-      // Group frames by animation
-      state.animations.forEach(anim => {
-        anim.frames = [];
-        for (let i = 1; i <= 10; i++) {
-          const frameName = `${anim.name}${i}`;
-          if (frames[frameName]) {
-            anim.frames.push(unpackFrame(frames[frameName]));
+      // Parse frame arrays to discover animations and their frame order
+      // e.g. const uint8_t *const petIdleFrames[] PROGMEM = {petIdle1, petIdle2};
+      const frameArrayRegex = /const uint8_t \*const (\w+)Frames\[\]\s*PROGMEM\s*=\s*\{([^}]+)\}/g;
+      const discoveredAnims = {};
+      const animationFrameNames = new Set(); // Track which frames belong to animations
+      while ((match = frameArrayRegex.exec(content)) !== null) {
+        const animName = match[1];
+        const frameNames = match[2].split(',').map(s => s.trim()).filter(s => s);
+        discoveredAnims[animName] = frameNames;
+        frameNames.forEach(fn => animationFrameNames.add(fn));
+      }
+      
+      // Parse comments for animations if available
+      const commentRegex = /\/\/\s*(\w+)\s*-\s*(.+)/g;
+      const comments = {};
+      while ((match = commentRegex.exec(content)) !== null) {
+        const name = match[1].toLowerCase();
+        comments[name] = match[2].trim();
+      }
+      
+      // Find standalone icons (frames not part of any animation)
+      state.staticIcons = [];
+      Object.keys(frames).forEach(frameName => {
+        if (!animationFrameNames.has(frameName)) {
+          // Check if it looks like an animation frame (ends with number)
+          const isNumberedFrame = /\d+$/.test(frameName);
+          // Check if there's a corresponding Frames array
+          const baseName = frameName.replace(/\d+$/, '');
+          const hasFramesArray = discoveredAnims[baseName];
+          
+          if (!isNumberedFrame || !hasFramesArray) {
+            // This is a standalone icon
+            state.staticIcons.push({
+              name: frameName,
+              bytes: frames[frameName],
+              comment: comments[frameName.toLowerCase()] || ''
+            });
           }
         }
+      });
+      
+      // Group frames by animation - check predefined animations first
+      state.animations.forEach(anim => {
+        anim.frames = [];
+        
+        // Check if this animation was in the frame arrays
+        if (discoveredAnims[anim.name]) {
+          // Use the exact frame order from the file
+          discoveredAnims[anim.name].forEach(frameName => {
+            if (frames[frameName]) {
+              anim.frames.push(unpackFrame(frames[frameName]));
+            }
+          });
+        } else {
+          // Fall back to numbered frames (up to 20)
+          for (let i = 1; i <= 20; i++) {
+            const frameName = `${anim.name}${i}`;
+            if (frames[frameName]) {
+              anim.frames.push(unpackFrame(frames[frameName]));
+            }
+          }
+        }
+        
+        // Update comment if found
+        const animNameLower = anim.name.toLowerCase();
+        if (comments[animNameLower]) {
+          anim.comment = comments[animNameLower];
+        }
+        
         if (anim.frames.length === 0) {
           anim.frames.push(new Array(state.w * state.h).fill(0));
+        }
+      });
+      
+      // Check for any animations in the file that aren't in our predefined list
+      const predefinedNames = state.animations.map(a => a.name);
+      Object.keys(discoveredAnims).forEach(animName => {
+        if (!predefinedNames.includes(animName)) {
+          // Add this animation
+          const newAnim = {
+            name: animName,
+            comment: comments[animName.toLowerCase()] || 'Imported animation',
+            frames: []
+          };
+          discoveredAnims[animName].forEach(frameName => {
+            if (frames[frameName]) {
+              newAnim.frames.push(unpackFrame(frames[frameName]));
+            }
+          });
+          if (newAnim.frames.length > 0) {
+            state.animations.push(newAnim);
+          }
         }
       });
       
@@ -1313,7 +1427,8 @@
       updateFrameStrip();
       draw();
       generateOutput();
-      toast('Imported ' + Object.keys(frames).length + ' frames');
+      const iconCount = state.staticIcons.length;
+      toast(`Imported ${Object.keys(frames).length} frames` + (iconCount ? ` + ${iconCount} icons` : ''));
     }
     
     // ============================================================================
