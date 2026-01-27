@@ -995,7 +995,6 @@
       if (selection.floatingPixels) {
         // Copy floating pixels
         internalClipboard = selection.floatingPixels.map(row => [...row]);
-        toast(`Copied ${internalClipboard[0].length}×${internalClipboard.length} pixels`);
       } else {
         // Copy from canvas (marquee selection)
         const minX = Math.min(selection.startX, selection.endX);
@@ -1019,7 +1018,44 @@
             }
           }
         }
-        toast(`Copied ${width}×${height} pixels`);
+      }
+      
+      // Also copy to system clipboard as image
+      copySelectionToSystemClipboard(internalClipboard);
+      toast(`Copied ${internalClipboard[0].length}×${internalClipboard.length} pixels`);
+    }
+    
+    async function copySelectionToSystemClipboard(pixels2D) {
+      // Create a canvas with the selection
+      const width = pixels2D[0].length;
+      const height = pixels2D.length;
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = width;
+      tempCanvas.height = height;
+      const ctx = tempCanvas.getContext('2d');
+      
+      // Draw pixels (white on black for visibility)
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, width, height);
+      ctx.fillStyle = '#ffffff';
+      
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          if (pixels2D[y][x]) {
+            ctx.fillRect(x, y, 1, 1);
+          }
+        }
+      }
+      
+      // Convert to blob and copy to clipboard
+      try {
+        const blob = await new Promise(resolve => tempCanvas.toBlob(resolve, 'image/png'));
+        await navigator.clipboard.write([
+          new ClipboardItem({ 'image/png': blob })
+        ]);
+      } catch (err) {
+        // Silently fail if clipboard write fails (e.g., permission denied)
+        console.log('Could not copy to system clipboard:', err);
       }
     }
     
