@@ -222,7 +222,7 @@
           <canvas id="clipboardOriginal" width="96" height="96"></canvas>
         </div>
         <div>
-          <div class="modal-preview-label">Binary Preview</div>
+          <div class="modal-preview-label">Binary Preview (<span id="previewSize"></span>)</div>
           <canvas id="clipboardBinary" width="96" height="96"></canvas>
         </div>
       </div>
@@ -239,9 +239,10 @@
           <span style="font-size:12px">Invert colors</span>
         </label>
       </div>
+      <div class="legend" style="margin:8px 0">Image will be pasted at original size as a movable selection.</div>
       <div class="modal-actions">
         <button class="btn ghost" id="cancelClipboard">Cancel</button>
-        <button class="btn primary" id="applyClipboard">Apply to Frame</button>
+        <button class="btn primary" id="applyClipboard">Paste as Selection</button>
       </div>
     </div>
   </div>
@@ -426,11 +427,11 @@
         const selMinX = Math.min(selection.startX, selection.endX);
         const selMinY = Math.min(selection.startY, selection.endY);
         
-        g.fillStyle = 'rgba(124, 144, 255, 0.3)';
         for (let dy = 0; dy < selection.floatingPixels.length; dy++) {
           for (let dx = 0; dx < selection.floatingPixels[dy].length; dx++) {
             const px = selMinX + dx;
             const py = selMinY + dy;
+            // Draw even if outside canvas bounds (will be clipped on commit)
             if (px >= 0 && px < state.w && py >= 0 && py < state.h) {
               if (selection.floatingPixels[dy][dx]) {
                 g.fillStyle = '#7cffb0';
@@ -470,16 +471,27 @@
       }
       
       const z = state.zoom;
-      const minX = Math.min(selection.startX, selection.endX);
-      const minY = Math.min(selection.startY, selection.endY);
-      const maxX = Math.max(selection.startX, selection.endX);
-      const maxY = Math.max(selection.startY, selection.endY);
+      let minX, minY, width, height;
+      
+      if (selection.floatingPixels) {
+        // For floating selections (pasted or lifted), use direct coords
+        minX = selection.startX;
+        minY = selection.startY;
+        width = selection.floatingPixels[0].length;
+        height = selection.floatingPixels.length;
+      } else {
+        // For marquee selection being drawn
+        minX = Math.min(selection.startX, selection.endX);
+        minY = Math.min(selection.startY, selection.endY);
+        width = Math.abs(selection.endX - selection.startX) + 1;
+        height = Math.abs(selection.endY - selection.startY) + 1;
+      }
       
       selectionOverlay.style.display = 'block';
       selectionOverlay.style.left = (minX * z) + 'px';
       selectionOverlay.style.top = (minY * z) + 'px';
-      selectionOverlay.style.width = ((maxX - minX + 1) * z) + 'px';
-      selectionOverlay.style.height = ((maxY - minY + 1) * z) + 'px';
+      selectionOverlay.style.width = (width * z) + 'px';
+      selectionOverlay.style.height = (height * z) + 'px';
     }
     
     function drawPreview() {
@@ -702,13 +714,22 @@
       if (state.tool === 'select' && selection.dragging) {
         const newMinX = x - selection.dragOffsetX;
         const newMinY = y - selection.dragOffsetY;
-        const width = Math.abs(selection.endX - selection.startX);
-        const height = Math.abs(selection.endY - selection.startY);
         
-        selection.startX = newMinX;
-        selection.startY = newMinY;
-        selection.endX = newMinX + width;
-        selection.endY = newMinY + height;
+        if (selection.floatingPixels) {
+          // For floating selections, just update start position
+          selection.startX = newMinX;
+          selection.startY = newMinY;
+          // endX/endY are recalculated from floatingPixels dimensions
+          selection.endX = newMinX + selection.floatingPixels[0].length - 1;
+          selection.endY = newMinY + selection.floatingPixels.length - 1;
+        } else {
+          const width = Math.abs(selection.endX - selection.startX);
+          const height = Math.abs(selection.endY - selection.startY);
+          selection.startX = newMinX;
+          selection.startY = newMinY;
+          selection.endX = newMinX + width;
+          selection.endY = newMinY + height;
+        }
         draw();
         return;
       }
@@ -762,10 +783,19 @@
     
     function isInsideSelection(x, y) {
       if (!selection.active) return false;
-      const minX = Math.min(selection.startX, selection.endX);
-      const minY = Math.min(selection.startY, selection.endY);
-      const maxX = Math.max(selection.startX, selection.endX);
-      const maxY = Math.max(selection.startY, selection.endY);
+      
+      let minX, minY, maxX, maxY;
+      if (selection.floatingPixels) {
+        minX = selection.startX;
+        minY = selection.startY;
+        maxX = selection.startX + selection.floatingPixels[0].length - 1;
+        maxY = selection.startY + selection.floatingPixels.length - 1;
+      } else {
+        minX = Math.min(selection.startX, selection.endX);
+        minY = Math.min(selection.startY, selection.endY);
+        maxX = Math.max(selection.startX, selection.endX);
+        maxY = Math.max(selection.startY, selection.endY);
+      }
       return x >= minX && x <= maxX && y >= minY && y <= maxY;
     }
     
@@ -809,11 +839,12 @@
         return;
       }
       
-      const minX = Math.min(selection.startX, selection.endX);
-      const minY = Math.min(selection.startY, selection.endY);
+      // For floating selections, startX/startY is always the top-left
+      const minX = selection.startX;
+      const minY = selection.startY;
       const pixels = currentPixels();
       
-      // Stamp floating pixels onto canvas
+      // Stamp floating pixels onto canvas (clipping to bounds)
       for (let dy = 0; dy < selection.floatingPixels.length; dy++) {
         for (let dx = 0; dx < selection.floatingPixels[dy].length; dx++) {
           const px = minX + dx;
@@ -1107,23 +1138,28 @@
       origCtx.fillRect(0, 0, 96, 96);
       origCtx.drawImage(clipboardImage, (96 - scaledW) / 2, (96 - scaledH) / 2, scaledW, scaledH);
       
-      // Create binary preview at target resolution
+      // Convert to binary at ORIGINAL size (1:1 pixel mapping)
+      const imgW = clipboardImage.width;
+      const imgH = clipboardImage.height;
+      const binaryPixels = convertImageToBinaryOriginalSize(clipboardImage, clipboardThreshold, clipboardInvert);
+      
+      // Show size info
+      $('#previewSize').textContent = `${imgW}×${imgH}px`;
+      
+      // Create binary preview
       binCanvas.width = 96;
       binCanvas.height = 96;
       binCtx.fillStyle = '#0f1115';
       binCtx.fillRect(0, 0, 96, 96);
       
-      // Convert to binary at target frame size
-      const binaryPixels = convertImageToBinary(clipboardImage, state.w, state.h, clipboardThreshold, clipboardInvert);
+      // Draw binary preview scaled to fit
+      const pxSize = Math.min(96 / imgW, 96 / imgH);
+      const offsetX = (96 - imgW * pxSize) / 2;
+      const offsetY = (96 - imgH * pxSize) / 2;
       
-      // Draw binary preview
-      const pxSize = Math.min(96 / state.w, 96 / state.h);
-      const offsetX = (96 - state.w * pxSize) / 2;
-      const offsetY = (96 - state.h * pxSize) / 2;
-      
-      for (let y = 0; y < state.h; y++) {
-        for (let x = 0; x < state.w; x++) {
-          if (binaryPixels[y * state.w + x]) {
+      for (let y = 0; y < imgH; y++) {
+        for (let x = 0; x < imgW; x++) {
+          if (binaryPixels[y][x]) {
             binCtx.fillStyle = '#e5e9f0';
             binCtx.fillRect(offsetX + x * pxSize, offsetY + y * pxSize, pxSize, pxSize);
           }
@@ -1131,41 +1167,33 @@
       }
     }
     
-    function convertImageToBinary(img, targetW, targetH, threshold, invert) {
-      // Create temp canvas for processing
+    function convertImageToBinaryOriginalSize(img, threshold, invert) {
+      // Create temp canvas at original image size
       const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = targetW;
-      tempCanvas.height = targetH;
+      const imgW = img.width;
+      const imgH = img.height;
+      tempCanvas.width = imgW;
+      tempCanvas.height = imgH;
       const ctx = tempCanvas.getContext('2d');
       
-      // Draw image scaled to fit target dimensions
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, targetW, targetH);
-      
-      // Calculate scaling to fit while maintaining aspect ratio
-      const scaleX = targetW / img.width;
-      const scaleY = targetH / img.height;
-      const scale = Math.min(scaleX, scaleY);
-      const drawW = img.width * scale;
-      const drawH = img.height * scale;
-      const offsetX = (targetW - drawW) / 2;
-      const offsetY = (targetH - drawH) / 2;
-      
-      ctx.drawImage(img, offsetX, offsetY, drawW, drawH);
+      // Draw image at original size
+      ctx.drawImage(img, 0, 0);
       
       // Get pixel data
-      const imageData = ctx.getImageData(0, 0, targetW, targetH);
+      const imageData = ctx.getImageData(0, 0, imgW, imgH);
       const data = imageData.data;
-      const pixels = new Array(targetW * targetH).fill(0);
       
-      for (let y = 0; y < targetH; y++) {
-        for (let x = 0; x < targetW; x++) {
-          const i = (y * targetW + x) * 4;
+      // Create 2D array for easier use as floating selection
+      const pixels = [];
+      for (let y = 0; y < imgH; y++) {
+        pixels[y] = [];
+        for (let x = 0; x < imgW; x++) {
+          const i = (y * imgW + x) * 4;
           // Convert to grayscale using luminance formula
           const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
           let isOn = gray < threshold;
           if (invert) isOn = !isOn;
-          pixels[y * targetW + x] = isOn ? 1 : 0;
+          pixels[y][x] = isOn ? 1 : 0;
         }
       }
       
@@ -1176,13 +1204,27 @@
       if (!clipboardImage) return;
       
       pushHistory();
-      const binaryPixels = convertImageToBinary(clipboardImage, state.w, state.h, clipboardThreshold, clipboardInvert);
-      currentAnim().frames[state.currentFrame] = binaryPixels;
+      
+      // Convert to binary at original size
+      const binaryPixels = convertImageToBinaryOriginalSize(clipboardImage, clipboardThreshold, clipboardInvert);
+      
+      // Create floating selection with the pasted pixels
+      selection.floatingPixels = binaryPixels;
+      selection.startX = 0;
+      selection.startY = 0;
+      selection.endX = binaryPixels[0].length - 1;
+      selection.endY = binaryPixels.length - 1;
+      selection.active = true;
+      selection.dragging = false;
+      
+      // Switch to select tool
+      state.tool = 'select';
+      document.querySelectorAll('[data-tool]').forEach(b => b.classList.remove('active'));
+      document.querySelector('[data-tool="select"]').classList.add('active');
       
       hideClipboardModal();
       draw();
-      generateOutput();
-      toast('Image imported to frame');
+      toast('Image pasted - drag to position, press Escape to commit');
     }
     
     // ============================================================================
