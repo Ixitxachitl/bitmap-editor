@@ -181,7 +181,7 @@
           <canvas id="grid" width="336" height="336"></canvas>
           <div class="selection-overlay" id="selectionOverlay" style="display:none"></div>
         </div>
-        <div class="legend">Left-click: draw • Right-click: erase • Ctrl+Z: undo • Ctrl+Y: redo • Ctrl+V: paste image</div>
+        <div class="legend">Left-click: draw • Right-click: erase • Ctrl+Z/Y: undo/redo • Ctrl+C/X/V: copy/cut/paste</div>
       </div>
     </section>
 
@@ -309,6 +309,9 @@
     let clipboardImage = null;
     let clipboardThreshold = 128;
     let clipboardInvert = false;
+    
+    // Internal clipboard for copy/paste within editor
+    let internalClipboard = null; // 2D array of pixels
     
     // Elements
     const $ = s => document.querySelector(s);
@@ -867,6 +870,98 @@
       selection.floatingPixels = null;
       selection.dragging = false;
       selectionOverlay.style.display = 'none';
+    }
+    
+    function copySelection() {
+      if (!selection.active) {
+        toast('No selection to copy');
+        return;
+      }
+      
+      if (selection.floatingPixels) {
+        // Copy floating pixels
+        internalClipboard = selection.floatingPixels.map(row => [...row]);
+      } else {
+        // Copy from canvas
+        const minX = Math.min(selection.startX, selection.endX);
+        const minY = Math.min(selection.startY, selection.endY);
+        const maxX = Math.max(selection.startX, selection.endX);
+        const maxY = Math.max(selection.startY, selection.endY);
+        const width = maxX - minX + 1;
+        const height = maxY - minY + 1;
+        
+        const pixels = currentPixels();
+        internalClipboard = [];
+        for (let dy = 0; dy < height; dy++) {
+          internalClipboard[dy] = [];
+          for (let dx = 0; dx < width; dx++) {
+            const px = minX + dx;
+            const py = minY + dy;
+            if (px >= 0 && px < state.w && py >= 0 && py < state.h) {
+              internalClipboard[dy][dx] = pixels[py * state.w + px];
+            } else {
+              internalClipboard[dy][dx] = 0;
+            }
+          }
+        }
+      }
+      
+      toast('Copied to clipboard');
+    }
+    
+    function cutSelection() {
+      if (!selection.active) {
+        toast('No selection to cut');
+        return;
+      }
+      
+      pushHistory();
+      
+      // If not already floating, lift it first
+      if (!selection.floatingPixels) {
+        liftSelection();
+      }
+      
+      // Copy to clipboard
+      internalClipboard = selection.floatingPixels.map(row => [...row]);
+      
+      // Clear the floating selection (delete the pixels)
+      selection.floatingPixels = null;
+      clearSelection();
+      draw();
+      generateOutput();
+      toast('Cut to clipboard');
+    }
+    
+    function pasteFromInternalClipboard() {
+      if (!internalClipboard) {
+        toast('Nothing to paste');
+        return;
+      }
+      
+      // Commit any existing selection first
+      if (selection.floatingPixels) {
+        commitSelection();
+      }
+      
+      pushHistory();
+      
+      // Create new floating selection from clipboard
+      selection.floatingPixels = internalClipboard.map(row => [...row]);
+      selection.startX = 0;
+      selection.startY = 0;
+      selection.endX = selection.floatingPixels[0].length - 1;
+      selection.endY = selection.floatingPixels.length - 1;
+      selection.active = true;
+      selection.dragging = false;
+      
+      // Switch to select tool
+      state.tool = 'select';
+      document.querySelectorAll('[data-tool]').forEach(b => b.classList.remove('active'));
+      document.querySelector('[data-tool="select"]').classList.add('active');
+      
+      draw();
+      toast('Pasted - drag to position, Escape to commit');
     }
     
     function eventToCell(e) {
@@ -1466,6 +1561,20 @@
         const mod = e.ctrlKey || e.metaKey;
         if (mod && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
         else if (mod && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
+        else if (mod && e.key === 'c') {
+          // Copy selection
+          if (selection.active) {
+            e.preventDefault();
+            copySelection();
+          }
+        }
+        else if (mod && e.key === 'x') {
+          // Cut selection
+          if (selection.active) {
+            e.preventDefault();
+            cutSelection();
+          }
+        }
         else if (e.key === 'Escape') {
           // Cancel selection or commit it
           if (selection.floatingPixels) {
@@ -1477,9 +1586,27 @@
         }
         else if (e.key === 'Delete' || e.key === 'Backspace') {
           // Delete selected pixels
-          if (selection.active && selection.floatingPixels) {
+          if (selection.active) {
+            e.preventDefault();
             pushHistory();
-            selection.floatingPixels = null;
+            if (selection.floatingPixels) {
+              // Delete floating selection
+              selection.floatingPixels = null;
+            } else {
+              // Delete pixels in selection area
+              const minX = Math.min(selection.startX, selection.endX);
+              const minY = Math.min(selection.startY, selection.endY);
+              const maxX = Math.max(selection.startX, selection.endX);
+              const maxY = Math.max(selection.startY, selection.endY);
+              const pixels = currentPixels();
+              for (let y = minY; y <= maxY; y++) {
+                for (let x = minX; x <= maxX; x++) {
+                  if (x >= 0 && x < state.w && y >= 0 && y < state.h) {
+                    pixels[y * state.w + x] = 0;
+                  }
+                }
+              }
+            }
             clearSelection();
             draw();
             generateOutput();
@@ -1487,8 +1614,27 @@
         }
       });
       
-      // Clipboard paste handler
-      window.addEventListener('paste', handlePaste);
+      // Clipboard paste handler - check for image, otherwise use internal clipboard
+      window.addEventListener('paste', async (e) => {
+        const items = e.clipboardData?.items || [];
+        let hasImage = false;
+        
+        for (const item of items) {
+          if (item.type.startsWith('image/')) {
+            hasImage = true;
+            e.preventDefault();
+            const blob = item.getAsFile();
+            await processClipboardImage(blob);
+            return;
+          }
+        }
+        
+        // No image in clipboard - use internal clipboard if available
+        if (!hasImage && internalClipboard) {
+          e.preventDefault();
+          pasteFromInternalClipboard();
+        }
+      });
       
       // Clipboard modal events
       $('#thresholdSlider').oninput = () => {
@@ -1505,6 +1651,13 @@
       $('#cancelClipboard').onclick = hideClipboardModal;
       $('#applyClipboard').onclick = applyClipboardToFrame;
       $('#pasteImageBtn').onclick = async () => {
+        // First check if we have internal clipboard to paste
+        if (internalClipboard) {
+          pasteFromInternalClipboard();
+          return;
+        }
+        
+        // Otherwise try to read image from system clipboard
         try {
           const items = await navigator.clipboard.read();
           for (const item of items) {
