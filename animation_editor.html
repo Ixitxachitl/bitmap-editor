@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MeshPet Animation Editor</title>
+  <style>
+    :root{
+      --bg:#0f1115;--panel:#161a23;--panel-2:#1e2430;--text:#e5e9f0;--muted:#9aa4b2;--accent:#7c90ff;--grid:#2a3140;--on:#e5e9f0;--off:#0f1115;
+      --danger:#ff6b6b;--ok:#22c55e;--warn:#f59e0b;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:linear-gradient(180deg,#0f1115,#121624 60%);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,Arial,sans-serif}
+    header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:var(--panel);border-bottom:1px solid #232a3a;gap:10px;flex-wrap:wrap}
+    h1{font-size:18px;margin:0;font-weight:700;letter-spacing:.2px}
+    h1 span{color:var(--accent)}
+    .wrap{display:grid;grid-template-columns: 320px 1fr 280px;gap:14px;padding:14px;min-height:calc(100vh - 60px)}
+    .col{display:grid;gap:14px;align-content:start}
+    .card{background:var(--panel);border:1px solid #222a3a;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+    .card h2{font-size:13px;font-weight:700;margin:0;padding:10px 14px;border-bottom:1px solid #222a3a;color:#cbd5e1;display:flex;align-items:center;gap:8px}
+    .card .body{padding:12px 14px}
+    label{display:block;font-size:11px;color:var(--muted);margin:8px 0 4px}
+    input[type="number"],input[type="text"],select,textarea{width:100%;padding:8px 10px;border-radius:8px;border:1px solid #243048;background:var(--panel-2);color:var(--text);font-family:inherit;font-size:12px}
+    textarea{min-height:200px;resize:vertical}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .btn{appearance:none;border:1px solid #2b3650;background:#202635;color:var(--text);padding:7px 11px;border-radius:10px;font-weight:600;font-size:11px;cursor:pointer;white-space:nowrap}
+    .btn:hover{filter:brightness(1.15)}
+    .btn.primary{background:linear-gradient(180deg,#6378ff,#5a6df8);border-color:#5461de;color:white}
+    .btn.ghost{background:transparent;border-color:#303a57}
+    .btn.warn{background:#3b2a12;border-color:#5d3d12;color:#ffd68a}
+    .btn.danger{background:#3c1c1c;border-color:#5b2323;color:#ffb4b4}
+    .btn.small{padding:5px 8px;font-size:10px}
+    .btn.active{background:#2d3a5a;border-color:var(--accent)}
+    canvas{background:var(--off);border:1px solid #252c3e;border-radius:10px;image-rendering:pixelated;cursor:crosshair}
+    .legend{font-size:11px;color:var(--muted);margin-top:8px}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace}
+    
+    /* Animation list */
+    .anim-list{max-height:200px;overflow-y:auto;border:1px solid #243048;border-radius:8px;background:var(--panel-2)}
+    .anim-item{padding:8px 10px;border-bottom:1px solid #1a2030;cursor:pointer;font-size:12px;display:flex;justify-content:space-between;align-items:center}
+    .anim-item:hover{background:#232d42}
+    .anim-item.selected{background:#2a3a5a;border-left:3px solid var(--accent)}
+    .anim-item .name{font-weight:600}
+    .anim-item .count{color:var(--muted);font-size:10px}
+    
+    /* Frame strip */
+    .frame-strip{display:flex;gap:6px;flex-wrap:wrap;padding:8px;background:var(--panel-2);border-radius:8px;min-height:60px;align-items:center}
+    .frame-thumb{width:48px;height:48px;border:2px solid #2a3a50;border-radius:6px;cursor:pointer;image-rendering:pixelated;background:#0f1115}
+    .frame-thumb.selected{border-color:var(--accent);box-shadow:0 0 8px rgba(124,144,255,0.4)}
+    .frame-thumb:hover{border-color:#5a6a8a}
+    .add-frame{width:48px;height:48px;border:2px dashed #3a4a60;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#5a6a8a;font-size:20px}
+    .add-frame:hover{border-color:var(--accent);color:var(--accent)}
+    
+    /* Preview */
+    .preview-container{text-align:center}
+    .preview-container canvas{margin:10px auto;display:block}
+    .playback-controls{display:flex;gap:8px;justify-content:center;margin-top:10px}
+    
+    /* Editor tools */
+    .tools{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+    
+    @media(max-width:1100px){.wrap{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🐾 <span>MeshPet</span> Animation Editor</h1>
+    <div class="row">
+      <button class="btn" id="importFileBtn">Import PetImages.h</button>
+      <button class="btn primary" id="exportBtn">Export PetImages.h</button>
+      <button class="btn" id="copyBtn">Copy to Clipboard</button>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <!-- Left: Animation & Frame Selection -->
+    <div class="col">
+      <section class="card">
+        <h2>🎬 Animations</h2>
+        <div class="body">
+          <div class="row" style="margin-bottom:10px">
+            <select id="animSelect" style="flex:1"></select>
+            <button class="btn small" id="addAnimBtn">+ Add</button>
+            <button class="btn small danger" id="delAnimBtn">Delete</button>
+          </div>
+          <label>Animation Name (C identifier)</label>
+          <input type="text" id="animName" placeholder="e.g. petIdle"/>
+          <label>Comment</label>
+          <input type="text" id="animComment" placeholder="e.g. Idle breathing animation"/>
+        </div>
+      </section>
+      
+      <section class="card">
+        <h2>🖼️ Frames</h2>
+        <div class="body">
+          <div class="frame-strip" id="frameStrip">
+            <div class="add-frame" id="addFrameBtn">+</div>
+          </div>
+          <div class="row" style="margin-top:10px">
+            <button class="btn small" id="dupFrameBtn">Duplicate</button>
+            <button class="btn small" id="delFrameBtn">Delete Frame</button>
+            <button class="btn small" id="moveLeftBtn">◀</button>
+            <button class="btn small" id="moveRightBtn">▶</button>
+          </div>
+        </div>
+      </section>
+      
+      <section class="card">
+        <h2>▶️ Preview</h2>
+        <div class="body preview-container">
+          <canvas id="preview" width="72" height="72"></canvas>
+          <div class="playback-controls">
+            <button class="btn small" id="playBtn">▶ Play</button>
+            <button class="btn small" id="stopBtn">⏹ Stop</button>
+            <label style="margin:0;display:flex;align-items:center;gap:4px">
+              <span>Speed:</span>
+              <input type="range" id="speedSlider" min="100" max="1000" value="300" style="width:80px"/>
+            </label>
+          </div>
+        </div>
+      </section>
+      
+      <section class="card">
+        <h2>⚙️ Settings</h2>
+        <div class="body">
+          <div class="row">
+            <div style="flex:1">
+              <label>Width</label>
+              <input type="number" id="globalW" value="24" min="1" max="64"/>
+            </div>
+            <div style="flex:1">
+              <label>Height</label>
+              <input type="number" id="globalH" value="24" min="1" max="64"/>
+            </div>
+          </div>
+          <label>Zoom</label>
+          <input type="range" id="zoom" min="8" max="24" value="14"/>
+        </div>
+      </section>
+    </div>
+
+    <!-- Center: Editor -->
+    <section class="card">
+      <h2>✏️ Editor</h2>
+      <div class="body">
+        <div class="tools">
+          <button class="btn small active" data-tool="draw">Draw</button>
+          <button class="btn small" data-tool="erase">Erase</button>
+          <button class="btn small" data-tool="line">Line</button>
+          <button class="btn small" data-tool="rect">Rect</button>
+          <button class="btn small" data-tool="fill">Fill</button>
+          <span style="border-left:1px solid #3a4a60;height:20px;margin:0 4px"></span>
+          <button class="btn small" id="clearBtn">Clear</button>
+          <button class="btn small" id="invertBtn">Invert</button>
+          <button class="btn small" id="flipHBtn">Flip H</button>
+          <button class="btn small" id="flipVBtn">Flip V</button>
+          <button class="btn small" id="undoBtn">Undo</button>
+          <button class="btn small" id="redoBtn">Redo</button>
+        </div>
+        <canvas id="grid" width="336" height="336"></canvas>
+        <div class="legend">Left-click: draw • Right-click: erase • Ctrl+Z: undo • Ctrl+Y: redo</div>
+      </div>
+    </section>
+
+    <!-- Right: Output -->
+    <div class="col">
+      <section class="card" style="flex:1">
+        <h2>📄 Output</h2>
+        <div class="body">
+          <textarea id="output" class="mono" readonly placeholder="Generated code will appear here..."></textarea>
+          <div class="legend">This generates the complete PetImages.h file with all animations.</div>
+        </div>
+      </section>
+      
+      <section class="card">
+        <h2>📥 Import Frame</h2>
+        <div class="body">
+          <label>Paste hex array</label>
+          <textarea id="importHex" class="mono" style="min-height:80px" placeholder="0x00, 0x1C, ..."></textarea>
+          <div class="row" style="margin-top:8px">
+            <button class="btn small" id="importFrameBtn">Import to Current Frame</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <input type="file" id="fileInput" accept=".h,.txt" style="display:none"/>
+
+  <script>
+    // ============================================================================
+    // STATE
+    // ============================================================================
+    const FRAME_W = 24, FRAME_H = 24;
+    
+    const defaultAnimations = [
+      { name: 'petIdle', comment: 'Idle/breathing animation', frames: [] },
+      { name: 'petWalk', comment: '4 frame walk cycle', frames: [] },
+      { name: 'petHappy', comment: 'Happy bounce', frames: [] },
+      { name: 'petSleep', comment: 'Sleeping with Zzz', frames: [] },
+      { name: 'petExcited', comment: 'Jumping/excited', frames: [] },
+      { name: 'petEating', comment: 'Eating/receiving data', frames: [] },
+      { name: 'petPlaying', comment: 'Playful animation', frames: [] },
+      { name: 'petAlert', comment: 'Alert/attention', frames: [] },
+      { name: 'petSad', comment: 'Sad/lonely', frames: [] },
+      { name: 'petReading', comment: 'Reading text messages', frames: [] },
+      { name: 'petLooking', comment: 'Looking around', frames: [] },
+      { name: 'petWaving', comment: 'Waving hello', frames: [] },
+      { name: 'petThinking', comment: 'Thinking/processing', frames: [] },
+      { name: 'petScared', comment: 'Scared/alarmed', frames: [] },
+      { name: 'petHopping', comment: 'Happy hopping', frames: [] },
+      { name: 'petScratching', comment: 'Idle scratching', frames: [] },
+      { name: 'petDancing', comment: 'Happy dancing', frames: [] },
+      { name: 'petYawning', comment: 'Tired yawning', frames: [] },
+      { name: 'petSniffing', comment: 'Curious sniffing', frames: [] },
+    ];
+    
+    let state = {
+      animations: JSON.parse(JSON.stringify(defaultAnimations)),
+      currentAnim: 0,
+      currentFrame: 0,
+      w: FRAME_W,
+      h: FRAME_H,
+      zoom: 14,
+      tool: 'draw',
+      playing: false,
+      playInterval: null,
+      speed: 300
+    };
+    
+    // History
+    const undoStack = [], redoStack = [];
+    const MAX_HISTORY = 50;
+    
+    // Elements
+    const $ = s => document.querySelector(s);
+    const grid = $('#grid'), g = grid.getContext('2d');
+    const preview = $('#preview'), gp = preview.getContext('2d');
+    const animSelect = $('#animSelect');
+    const frameStrip = $('#frameStrip');
+    const output = $('#output');
+    
+    // ============================================================================
+    // INITIALIZATION
+    // ============================================================================
+    function init() {
+      // Add empty first frame to each animation
+      state.animations.forEach(a => {
+        if (a.frames.length === 0) {
+          a.frames.push(new Array(state.w * state.h).fill(0));
+        }
+      });
+      
+      populateAnimSelect();
+      updateFrameStrip();
+      resizeCanvas();
+      draw();
+      bindEvents();
+      generateOutput();
+    }
+    
+    function populateAnimSelect() {
+      animSelect.innerHTML = state.animations.map((a, i) => 
+        `<option value="${i}">${a.name} (${a.frames.length} frames)</option>`
+      ).join('');
+      animSelect.value = state.currentAnim;
+      $('#animName').value = state.animations[state.currentAnim].name;
+      $('#animComment').value = state.animations[state.currentAnim].comment;
+    }
+    
+    function updateFrameStrip() {
+      const anim = state.animations[state.currentAnim];
+      const addBtn = $('#addFrameBtn');
+      
+      // Remove old thumbs
+      frameStrip.querySelectorAll('.frame-thumb').forEach(el => el.remove());
+      
+      // Add frame thumbnails
+      anim.frames.forEach((frame, i) => {
+        const thumb = document.createElement('canvas');
+        thumb.className = 'frame-thumb' + (i === state.currentFrame ? ' selected' : '');
+        thumb.width = 48;
+        thumb.height = 48;
+        thumb.dataset.index = i;
+        thumb.onclick = () => selectFrame(i);
+        frameStrip.insertBefore(thumb, addBtn);
+        drawThumb(thumb, frame);
+      });
+    }
+    
+    function drawThumb(canvas, pixels) {
+      const ctx = canvas.getContext('2d');
+      const scale = Math.floor(48 / Math.max(state.w, state.h));
+      ctx.fillStyle = '#0f1115';
+      ctx.fillRect(0, 0, 48, 48);
+      for (let y = 0; y < state.h; y++) {
+        for (let x = 0; x < state.w; x++) {
+          if (pixels[y * state.w + x]) {
+            ctx.fillStyle = '#e5e9f0';
+            ctx.fillRect(x * scale, y * scale, scale, scale);
+          }
+        }
+      }
+    }
+    
+    function selectFrame(i) {
+      state.currentFrame = Math.max(0, Math.min(i, currentAnim().frames.length - 1));
+      updateFrameStrip();
+      draw();
+    }
+    
+    function currentAnim() {
+      return state.animations[state.currentAnim];
+    }
+    
+    function currentPixels() {
+      const anim = currentAnim();
+      if (!anim.frames[state.currentFrame]) {
+        anim.frames[state.currentFrame] = new Array(state.w * state.h).fill(0);
+      }
+      return anim.frames[state.currentFrame];
+    }
+    
+    // ============================================================================
+    // DRAWING
+    // ============================================================================
+    function resizeCanvas() {
+      grid.width = state.w * state.zoom;
+      grid.height = state.h * state.zoom;
+    }
+    
+    function draw() {
+      const z = state.zoom;
+      const pixels = currentPixels();
+      
+      g.fillStyle = '#0b0e16';
+      g.fillRect(0, 0, grid.width, grid.height);
+      
+      for (let y = 0; y < state.h; y++) {
+        for (let x = 0; x < state.w; x++) {
+          g.fillStyle = pixels[y * state.w + x] ? '#e5e9f0' : '#0f1115';
+          g.fillRect(x * z, y * z, z, z);
+        }
+      }
+      
+      // Grid lines
+      g.strokeStyle = '#2b3245';
+      g.lineWidth = 1;
+      g.beginPath();
+      for (let x = 0; x <= state.w; x++) {
+        g.moveTo(x * z + 0.5, 0);
+        g.lineTo(x * z + 0.5, grid.height);
+      }
+      for (let y = 0; y <= state.h; y++) {
+        g.moveTo(0, y * z + 0.5);
+        g.lineTo(grid.width, y * z + 0.5);
+      }
+      g.stroke();
+      
+      // Update preview
+      drawPreview();
+      updateFrameStrip();
+    }
+    
+    function drawPreview() {
+      const pixels = currentPixels();
+      const scale = 3;
+      preview.width = state.w * scale;
+      preview.height = state.h * scale;
+      gp.fillStyle = '#0f1115';
+      gp.fillRect(0, 0, preview.width, preview.height);
+      for (let y = 0; y < state.h; y++) {
+        for (let x = 0; x < state.w; x++) {
+          if (pixels[y * state.w + x]) {
+            gp.fillStyle = '#e5e9f0';
+            gp.fillRect(x * scale, y * scale, scale, scale);
+          }
+        }
+      }
+    }
+    
+    function drawAnimatedPreview(frameIndex) {
+      const anim = currentAnim();
+      if (frameIndex >= anim.frames.length) frameIndex = 0;
+      const pixels = anim.frames[frameIndex];
+      const scale = 3;
+      gp.fillStyle = '#0f1115';
+      gp.fillRect(0, 0, preview.width, preview.height);
+      for (let y = 0; y < state.h; y++) {
+        for (let x = 0; x < state.w; x++) {
+          if (pixels && pixels[y * state.w + x]) {
+            gp.fillStyle = '#e5e9f0';
+            gp.fillRect(x * scale, y * scale, scale, scale);
+          }
+        }
+      }
+    }
+    
+    // ============================================================================
+    // PIXEL OPERATIONS
+    // ============================================================================
+    function setPx(x, y, v) {
+      if (x < 0 || y < 0 || x >= state.w || y >= state.h) return;
+      currentPixels()[y * state.w + x] = v;
+    }
+    
+    function getPx(x, y) {
+      if (x < 0 || y < 0 || x >= state.w || y >= state.h) return 0;
+      return currentPixels()[y * state.w + x] | 0;
+    }
+    
+    function clearFrame() {
+      pushHistory();
+      const pixels = currentPixels();
+      for (let i = 0; i < pixels.length; i++) pixels[i] = 0;
+      draw();
+      generateOutput();
+    }
+    
+    function invertFrame() {
+      pushHistory();
+      const pixels = currentPixels();
+      for (let i = 0; i < pixels.length; i++) pixels[i] = pixels[i] ? 0 : 1;
+      draw();
+      generateOutput();
+    }
+    
+    function flipH() {
+      pushHistory();
+      const pixels = currentPixels();
+      const out = new Array(state.w * state.h).fill(0);
+      for (let y = 0; y < state.h; y++) {
+        for (let x = 0; x < state.w; x++) {
+          out[y * state.w + x] = pixels[y * state.w + (state.w - 1 - x)];
+        }
+      }
+      currentAnim().frames[state.currentFrame] = out;
+      draw();
+      generateOutput();
+    }
+    
+    function flipV() {
+      pushHistory();
+      const pixels = currentPixels();
+      const out = new Array(state.w * state.h).fill(0);
+      for (let y = 0; y < state.h; y++) {
+        for (let x = 0; x < state.w; x++) {
+          out[y * state.w + x] = pixels[(state.h - 1 - y) * state.w + x];
+        }
+      }
+      currentAnim().frames[state.currentFrame] = out;
+      draw();
+      generateOutput();
+    }
+    
+    function floodFill(startX, startY, newVal) {
+      const target = getPx(startX, startY);
+      if (target === newVal) return;
+      const stack = [[startX, startY]];
+      while (stack.length) {
+        const [x, y] = stack.pop();
+        if (x < 0 || y < 0 || x >= state.w || y >= state.h) continue;
+        if (getPx(x, y) !== target) continue;
+        setPx(x, y, newVal);
+        stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+      }
+    }
+    
+    // ============================================================================
+    // HISTORY
+    // ============================================================================
+    function snapshot() {
+      return JSON.parse(JSON.stringify({
+        animations: state.animations,
+        currentAnim: state.currentAnim,
+        currentFrame: state.currentFrame
+      }));
+    }
+    
+    function pushHistory() {
+      undoStack.push(snapshot());
+      if (undoStack.length > MAX_HISTORY) undoStack.shift();
+      redoStack.length = 0;
+    }
+    
+    function undo() {
+      if (!undoStack.length) return;
+      redoStack.push(snapshot());
+      const prev = undoStack.pop();
+      state.animations = prev.animations;
+      state.currentAnim = prev.currentAnim;
+      state.currentFrame = prev.currentFrame;
+      populateAnimSelect();
+      updateFrameStrip();
+      draw();
+      generateOutput();
+    }
+    
+    function redo() {
+      if (!redoStack.length) return;
+      undoStack.push(snapshot());
+      const next = redoStack.pop();
+      state.animations = next.animations;
+      state.currentAnim = next.currentAnim;
+      state.currentFrame = next.currentFrame;
+      populateAnimSelect();
+      updateFrameStrip();
+      draw();
+      generateOutput();
+    }
+    
+    // ============================================================================
+    // MOUSE HANDLING
+    // ============================================================================
+    let drawing = false, lastX = -1, lastY = -1, lineStart = null, shapeBase = null;
+    
+    grid.addEventListener('contextmenu', e => e.preventDefault());
+    
+    grid.addEventListener('mousedown', e => {
+      const { x, y } = eventToCell(e);
+      const isErase = e.button === 2;
+      
+      if (state.tool === 'line' || state.tool === 'rect') {
+        lineStart = { x, y };
+        shapeBase = currentPixels().slice();
+        pushHistory();
+        drawing = true;
+        return;
+      }
+      
+      pushHistory();
+      drawing = true;
+      
+      if (state.tool === 'fill') {
+        floodFill(x, y, isErase ? 0 : 1);
+      } else {
+        setPx(x, y, isErase ? 0 : 1);
+      }
+      lastX = x; lastY = y;
+      draw();
+    });
+    
+    grid.addEventListener('mousemove', e => {
+      if (!drawing) return;
+      const { x, y } = eventToCell(e);
+      const isErase = e.buttons === 2;
+      
+      if (lineStart && (state.tool === 'line' || state.tool === 'rect')) {
+        currentAnim().frames[state.currentFrame] = shapeBase.slice();
+        const val = isErase ? 0 : 1;
+        if (state.tool === 'rect') {
+          drawRect(lineStart.x, lineStart.y, x, y, val);
+        } else {
+          drawLine(lineStart.x, lineStart.y, x, y, val);
+        }
+        draw();
+        return;
+      }
+      
+      if (x !== lastX || y !== lastY) {
+        if (lastX >= 0) drawLine(lastX, lastY, x, y, isErase ? 0 : 1);
+        else setPx(x, y, isErase ? 0 : 1);
+        lastX = x; lastY = y;
+        draw();
+      }
+    });
+    
+    window.addEventListener('mouseup', () => {
+      if (drawing) generateOutput();
+      drawing = false;
+      lastX = -1; lastY = -1;
+      lineStart = null; shapeBase = null;
+    });
+    
+    function eventToCell(e) {
+      const r = grid.getBoundingClientRect();
+      const x = Math.min(state.w - 1, Math.max(0, Math.floor((e.clientX - r.left) / state.zoom)));
+      const y = Math.min(state.h - 1, Math.max(0, Math.floor((e.clientY - r.top) / state.zoom)));
+      return { x, y };
+    }
+    
+    function drawLine(x0, y0, x1, y1, val) {
+      const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0);
+      const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+      let err = dx + dy;
+      while (true) {
+        setPx(x0, y0, val);
+        if (x0 === x1 && y0 === y1) break;
+        const e2 = 2 * err;
+        if (e2 >= dy) { err += dy; x0 += sx; }
+        if (e2 <= dx) { err += dx; y0 += sy; }
+      }
+    }
+    
+    function drawRect(x0, y0, x1, y1, val) {
+      const minX = Math.min(x0, x1), maxX = Math.max(x0, x1);
+      const minY = Math.min(y0, y1), maxY = Math.max(y0, y1);
+      for (let y = minY; y <= maxY; y++) {
+        for (let x = minX; x <= maxX; x++) {
+          if (y === minY || y === maxY || x === minX || x === maxX) {
+            setPx(x, y, val);
+          }
+        }
+      }
+    }
+    
+    // ============================================================================
+    // IMPORT/EXPORT
+    // ============================================================================
+    function packFrame(pixels) {
+      const bytes = [];
+      let cur = 0, count = 0;
+      for (let y = 0; y < state.h; y++) {
+        for (let x = 0; x < state.w; x++) {
+          const bit = pixels[y * state.w + x] ? 1 : 0;
+          cur |= (bit << count);
+          count++;
+          if (count === 8) {
+            bytes.push(cur);
+            cur = 0; count = 0;
+          }
+        }
+        // Pad row to byte boundary
+        if (count !== 0) {
+          bytes.push(cur);
+          cur = 0; count = 0;
+        }
+      }
+      return bytes;
+    }
+    
+    function unpackFrame(bytes) {
+      const pixels = new Array(state.w * state.h).fill(0);
+      let idx = 0;
+      for (let y = 0; y < state.h; y++) {
+        for (let x = 0; x < state.w; x++) {
+          const bitIndex = x % 8;
+          if (bitIndex === 0) var b = bytes[idx++] || 0;
+          pixels[y * state.w + x] = (b & (1 << bitIndex)) ? 1 : 0;
+        }
+        // Skip padding
+        const rem = state.w % 8;
+        if (rem !== 0 && (state.w % 8) !== 0) {
+          // Already consumed partial byte, idx incremented
+        }
+      }
+      return pixels;
+    }
+    
+    function generateOutput() {
+      let out = `#pragma once
+
+#include "configuration.h"
+
+#if !MESHTASTIC_EXCLUDE_PET
+
+/**
+ * PetImages.h - Animation frames for the PetModule
+ * Generated by MeshPet Animation Editor
+ */
+
+// Frame dimensions
+#define PET_FRAME_WIDTH ${state.w}
+#define PET_FRAME_HEIGHT ${state.h}
+
+// Frame counts per animation
+`;
+      
+      // Frame count defines
+      state.animations.forEach(a => {
+        const defName = a.name.replace(/^pet/, 'PET_').replace(/([A-Z])/g, '_$1').toUpperCase().replace(/__/g, '_') + '_FRAMES';
+        out += `#define ${defName} ${a.frames.length}\n`;
+      });
+      
+      out += '\n';
+      
+      // Frame data
+      state.animations.forEach(anim => {
+        out += `// ============================================================================\n`;
+        out += `// ${anim.name.toUpperCase()} - ${anim.comment}\n`;
+        out += `// ============================================================================\n\n`;
+        
+        anim.frames.forEach((frame, i) => {
+          const bytes = packFrame(frame);
+          const hex = bytes.map(b => '0x' + b.toString(16).toUpperCase().padStart(2, '0')).join(', ');
+          const frameName = `${anim.name}${i + 1}`;
+          
+          out += `// ${anim.name} Frame ${i + 1}\n`;
+          out += `const uint8_t ${frameName}[] PROGMEM = {${hex}};\n\n`;
+        });
+      });
+      
+      // Frame arrays
+      out += `// ============================================================================\n`;
+      out += `// FRAME ARRAYS\n`;
+      out += `// ============================================================================\n\n`;
+      
+      state.animations.forEach(anim => {
+        const frameNames = anim.frames.map((_, i) => `${anim.name}${i + 1}`).join(', ');
+        out += `const uint8_t *const ${anim.name}Frames[] PROGMEM = {${frameNames}};\n`;
+      });
+      
+      out += '\n#endif // !MESHTASTIC_EXCLUDE_PET\n';
+      
+      output.value = out;
+    }
+    
+    function parseHexArray(str) {
+      const bytes = [];
+      str.replace(/0x[0-9a-fA-F]{1,2}/gi, m => {
+        bytes.push(parseInt(m, 16));
+      });
+      return bytes;
+    }
+    
+    function importFrame() {
+      const hex = $('#importHex').value;
+      const bytes = parseHexArray(hex);
+      if (bytes.length === 0) {
+        toast('No valid hex bytes found');
+        return;
+      }
+      pushHistory();
+      currentAnim().frames[state.currentFrame] = unpackFrame(bytes);
+      draw();
+      generateOutput();
+      toast('Frame imported');
+    }
+    
+    function importPetImagesH(content) {
+      pushHistory();
+      
+      // Parse frame data
+      const frameRegex = /const uint8_t (\w+)\[\]\s*PROGMEM\s*=\s*\{([^}]+)\}/g;
+      const frames = {};
+      let match;
+      while ((match = frameRegex.exec(content)) !== null) {
+        const name = match[1];
+        const bytes = parseHexArray(match[2]);
+        frames[name] = bytes;
+      }
+      
+      // Parse dimensions
+      const wMatch = content.match(/#define PET_FRAME_WIDTH (\d+)/);
+      const hMatch = content.match(/#define PET_FRAME_HEIGHT (\d+)/);
+      if (wMatch) state.w = parseInt(wMatch[1]);
+      if (hMatch) state.h = parseInt(hMatch[1]);
+      $('#globalW').value = state.w;
+      $('#globalH').value = state.h;
+      
+      // Group frames by animation
+      state.animations.forEach(anim => {
+        anim.frames = [];
+        for (let i = 1; i <= 10; i++) {
+          const frameName = `${anim.name}${i}`;
+          if (frames[frameName]) {
+            anim.frames.push(unpackFrame(frames[frameName]));
+          }
+        }
+        if (anim.frames.length === 0) {
+          anim.frames.push(new Array(state.w * state.h).fill(0));
+        }
+      });
+      
+      state.currentAnim = 0;
+      state.currentFrame = 0;
+      resizeCanvas();
+      populateAnimSelect();
+      updateFrameStrip();
+      draw();
+      generateOutput();
+      toast('Imported ' + Object.keys(frames).length + ' frames');
+    }
+    
+    // ============================================================================
+    // ANIMATION PLAYBACK
+    // ============================================================================
+    function playAnimation() {
+      if (state.playing) return;
+      state.playing = true;
+      let frame = 0;
+      state.playInterval = setInterval(() => {
+        const anim = currentAnim();
+        frame = (frame + 1) % anim.frames.length;
+        drawAnimatedPreview(frame);
+      }, state.speed);
+    }
+    
+    function stopAnimation() {
+      state.playing = false;
+      if (state.playInterval) {
+        clearInterval(state.playInterval);
+        state.playInterval = null;
+      }
+      drawPreview();
+    }
+    
+    // ============================================================================
+    // EVENT BINDINGS
+    // ============================================================================
+    function bindEvents() {
+      // Animation selection
+      animSelect.onchange = () => {
+        state.currentAnim = parseInt(animSelect.value);
+        state.currentFrame = 0;
+        populateAnimSelect();
+        updateFrameStrip();
+        draw();
+      };
+      
+      $('#animName').oninput = () => {
+        currentAnim().name = $('#animName').value.replace(/\W/g, '');
+        populateAnimSelect();
+        generateOutput();
+      };
+      
+      $('#animComment').oninput = () => {
+        currentAnim().comment = $('#animComment').value;
+        generateOutput();
+      };
+      
+      // Add animation
+      $('#addAnimBtn').onclick = () => {
+        pushHistory();
+        const name = prompt('Animation name (e.g. petNewAnim):');
+        if (!name) return;
+        state.animations.push({
+          name: name.replace(/\W/g, ''),
+          comment: 'New animation',
+          frames: [new Array(state.w * state.h).fill(0)]
+        });
+        state.currentAnim = state.animations.length - 1;
+        state.currentFrame = 0;
+        populateAnimSelect();
+        updateFrameStrip();
+        draw();
+        generateOutput();
+      };
+      
+      // Delete animation
+      $('#delAnimBtn').onclick = () => {
+        if (state.animations.length <= 1) {
+          toast('Cannot delete last animation');
+          return;
+        }
+        if (!confirm('Delete animation "' + currentAnim().name + '"?')) return;
+        pushHistory();
+        state.animations.splice(state.currentAnim, 1);
+        state.currentAnim = Math.min(state.currentAnim, state.animations.length - 1);
+        state.currentFrame = 0;
+        populateAnimSelect();
+        updateFrameStrip();
+        draw();
+        generateOutput();
+      };
+      
+      // Frame management
+      $('#addFrameBtn').onclick = () => {
+        pushHistory();
+        currentAnim().frames.push(new Array(state.w * state.h).fill(0));
+        state.currentFrame = currentAnim().frames.length - 1;
+        updateFrameStrip();
+        draw();
+        generateOutput();
+      };
+      
+      $('#dupFrameBtn').onclick = () => {
+        pushHistory();
+        const copy = currentPixels().slice();
+        currentAnim().frames.splice(state.currentFrame + 1, 0, copy);
+        state.currentFrame++;
+        updateFrameStrip();
+        draw();
+        generateOutput();
+      };
+      
+      $('#delFrameBtn').onclick = () => {
+        if (currentAnim().frames.length <= 1) {
+          toast('Cannot delete last frame');
+          return;
+        }
+        pushHistory();
+        currentAnim().frames.splice(state.currentFrame, 1);
+        state.currentFrame = Math.min(state.currentFrame, currentAnim().frames.length - 1);
+        updateFrameStrip();
+        draw();
+        generateOutput();
+      };
+      
+      $('#moveLeftBtn').onclick = () => {
+        if (state.currentFrame === 0) return;
+        pushHistory();
+        const frames = currentAnim().frames;
+        [frames[state.currentFrame - 1], frames[state.currentFrame]] = 
+        [frames[state.currentFrame], frames[state.currentFrame - 1]];
+        state.currentFrame--;
+        updateFrameStrip();
+        generateOutput();
+      };
+      
+      $('#moveRightBtn').onclick = () => {
+        if (state.currentFrame >= currentAnim().frames.length - 1) return;
+        pushHistory();
+        const frames = currentAnim().frames;
+        [frames[state.currentFrame], frames[state.currentFrame + 1]] = 
+        [frames[state.currentFrame + 1], frames[state.currentFrame]];
+        state.currentFrame++;
+        updateFrameStrip();
+        generateOutput();
+      };
+      
+      // Tools
+      document.querySelectorAll('[data-tool]').forEach(btn => {
+        btn.onclick = () => {
+          document.querySelectorAll('[data-tool]').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          state.tool = btn.dataset.tool;
+        };
+      });
+      
+      // Edit buttons
+      $('#clearBtn').onclick = clearFrame;
+      $('#invertBtn').onclick = invertFrame;
+      $('#flipHBtn').onclick = flipH;
+      $('#flipVBtn').onclick = flipV;
+      $('#undoBtn').onclick = undo;
+      $('#redoBtn').onclick = redo;
+      
+      // Settings
+      $('#globalW').onchange = () => {
+        pushHistory();
+        state.w = Math.max(1, Math.min(64, parseInt($('#globalW').value) || 24));
+        resizeCanvas();
+        // Resize all frames
+        state.animations.forEach(a => {
+          a.frames = a.frames.map(f => {
+            const newF = new Array(state.w * state.h).fill(0);
+            // Copy what fits
+            return newF;
+          });
+        });
+        draw();
+        generateOutput();
+      };
+      
+      $('#globalH').onchange = () => {
+        pushHistory();
+        state.h = Math.max(1, Math.min(64, parseInt($('#globalH').value) || 24));
+        resizeCanvas();
+        draw();
+        generateOutput();
+      };
+      
+      $('#zoom').oninput = () => {
+        state.zoom = parseInt($('#zoom').value);
+        resizeCanvas();
+        draw();
+      };
+      
+      // Playback
+      $('#playBtn').onclick = playAnimation;
+      $('#stopBtn').onclick = stopAnimation;
+      $('#speedSlider').oninput = () => {
+        state.speed = parseInt($('#speedSlider').value);
+        if (state.playing) {
+          stopAnimation();
+          playAnimation();
+        }
+      };
+      
+      // Import/Export
+      $('#importFrameBtn').onclick = importFrame;
+      
+      $('#importFileBtn').onclick = () => $('#fileInput').click();
+      $('#fileInput').onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          importPetImagesH(ev.target.result);
+        };
+        reader.readAsText(file);
+      };
+      
+      $('#exportBtn').onclick = () => {
+        generateOutput();
+        const blob = new Blob([output.value], { type: 'text/plain' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'PetImages.h';
+        a.click();
+        URL.revokeObjectURL(a.href);
+      };
+      
+      $('#copyBtn').onclick = async () => {
+        generateOutput();
+        await navigator.clipboard.writeText(output.value);
+        toast('Copied to clipboard');
+      };
+      
+      // Keyboard shortcuts
+      window.addEventListener('keydown', (e) => {
+        const mod = e.ctrlKey || e.metaKey;
+        if (mod && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+        else if (mod && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
+      });
+    }
+    
+    // Toast notification
+    function toast(msg) {
+      const t = document.createElement('div');
+      t.textContent = msg;
+      t.style.cssText = 'position:fixed;bottom:16px;right:16px;background:#1f2534;border:1px solid #2e3952;padding:10px 12px;border-radius:10px;color:#d3dbeb;box-shadow:0 10px 30px rgba(0,0,0,.25);z-index:9999';
+      document.body.appendChild(t);
+      setTimeout(() => {
+        t.style.transition = 'all .3s ease';
+        t.style.opacity = '0';
+        t.style.transform = 'translateY(8px)';
+        setTimeout(() => t.remove(), 300);
+      }, 1500);
+    }
+    
+    // Start
+    init();
+  </script>
+</body>
+</html>
