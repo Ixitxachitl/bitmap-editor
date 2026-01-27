@@ -554,36 +554,144 @@
     
     function invertFrame() {
       pushHistory();
-      const pixels = currentPixels();
-      for (let i = 0; i < pixels.length; i++) pixels[i] = pixels[i] ? 0 : 1;
+      
+      // If there's an active selection, only invert that
+      if (selection.active) {
+        if (selection.floatingPixels) {
+          // Invert floating selection
+          for (let dy = 0; dy < selection.floatingPixels.length; dy++) {
+            for (let dx = 0; dx < selection.floatingPixels[dy].length; dx++) {
+              selection.floatingPixels[dy][dx] = selection.floatingPixels[dy][dx] ? 0 : 1;
+            }
+          }
+        } else {
+          // Invert marquee selection area
+          const minX = Math.min(selection.startX, selection.endX);
+          const minY = Math.min(selection.startY, selection.endY);
+          const maxX = Math.max(selection.startX, selection.endX);
+          const maxY = Math.max(selection.startY, selection.endY);
+          const pixels = currentPixels();
+          for (let y = minY; y <= maxY; y++) {
+            for (let x = minX; x <= maxX; x++) {
+              if (x >= 0 && x < state.w && y >= 0 && y < state.h) {
+                const i = y * state.w + x;
+                pixels[i] = pixels[i] ? 0 : 1;
+              }
+            }
+          }
+        }
+      } else {
+        // Invert entire frame
+        const pixels = currentPixels();
+        for (let i = 0; i < pixels.length; i++) pixels[i] = pixels[i] ? 0 : 1;
+      }
+      
       draw();
       generateOutput();
     }
     
     function flipH() {
       pushHistory();
-      const pixels = currentPixels();
-      const out = new Array(state.w * state.h).fill(0);
-      for (let y = 0; y < state.h; y++) {
-        for (let x = 0; x < state.w; x++) {
-          out[y * state.w + x] = pixels[y * state.w + (state.w - 1 - x)];
+      
+      // If there's an active selection, only flip that
+      if (selection.active) {
+        if (selection.floatingPixels) {
+          // Flip floating selection horizontally
+          selection.floatingPixels = selection.floatingPixels.map(row => [...row].reverse());
+        } else {
+          // Flip marquee selection area
+          const minX = Math.min(selection.startX, selection.endX);
+          const minY = Math.min(selection.startY, selection.endY);
+          const maxX = Math.max(selection.startX, selection.endX);
+          const maxY = Math.max(selection.startY, selection.endY);
+          const pixels = currentPixels();
+          
+          for (let y = minY; y <= maxY; y++) {
+            // Extract row within selection
+            const row = [];
+            for (let x = minX; x <= maxX; x++) {
+              if (x >= 0 && x < state.w && y >= 0 && y < state.h) {
+                row.push(pixels[y * state.w + x]);
+              } else {
+                row.push(0);
+              }
+            }
+            // Write back reversed
+            row.reverse();
+            for (let x = minX; x <= maxX; x++) {
+              if (x >= 0 && x < state.w && y >= 0 && y < state.h) {
+                pixels[y * state.w + x] = row[x - minX];
+              }
+            }
+          }
         }
+      } else {
+        // Flip entire frame
+        const pixels = currentPixels();
+        const out = new Array(state.w * state.h).fill(0);
+        for (let y = 0; y < state.h; y++) {
+          for (let x = 0; x < state.w; x++) {
+            out[y * state.w + x] = pixels[y * state.w + (state.w - 1 - x)];
+          }
+        }
+        currentAnim().frames[state.currentFrame] = out;
       }
-      currentAnim().frames[state.currentFrame] = out;
+      
       draw();
       generateOutput();
     }
     
     function flipV() {
       pushHistory();
-      const pixels = currentPixels();
-      const out = new Array(state.w * state.h).fill(0);
-      for (let y = 0; y < state.h; y++) {
-        for (let x = 0; x < state.w; x++) {
-          out[y * state.w + x] = pixels[(state.h - 1 - y) * state.w + x];
+      
+      // If there's an active selection, only flip that
+      if (selection.active) {
+        if (selection.floatingPixels) {
+          // Flip floating selection vertically
+          selection.floatingPixels = [...selection.floatingPixels].reverse();
+        } else {
+          // Flip marquee selection area
+          const minX = Math.min(selection.startX, selection.endX);
+          const minY = Math.min(selection.startY, selection.endY);
+          const maxX = Math.max(selection.startX, selection.endX);
+          const maxY = Math.max(selection.startY, selection.endY);
+          const height = maxY - minY + 1;
+          const pixels = currentPixels();
+          
+          // Extract selection into temp array
+          const temp = [];
+          for (let y = minY; y <= maxY; y++) {
+            temp[y - minY] = [];
+            for (let x = minX; x <= maxX; x++) {
+              if (x >= 0 && x < state.w && y >= 0 && y < state.h) {
+                temp[y - minY][x - minX] = pixels[y * state.w + x];
+              } else {
+                temp[y - minY][x - minX] = 0;
+              }
+            }
+          }
+          
+          // Write back flipped
+          for (let y = minY; y <= maxY; y++) {
+            for (let x = minX; x <= maxX; x++) {
+              if (x >= 0 && x < state.w && y >= 0 && y < state.h) {
+                pixels[y * state.w + x] = temp[maxY - y][x - minX];
+              }
+            }
+          }
         }
+      } else {
+        // Flip entire frame
+        const pixels = currentPixels();
+        const out = new Array(state.w * state.h).fill(0);
+        for (let y = 0; y < state.h; y++) {
+          for (let x = 0; x < state.w; x++) {
+            out[y * state.w + x] = pixels[(state.h - 1 - y) * state.w + x];
+          }
+        }
+        currentAnim().frames[state.currentFrame] = out;
       }
-      currentAnim().frames[state.currentFrame] = out;
+      
       draw();
       generateOutput();
     }
@@ -700,10 +808,13 @@
       pushHistory();
       drawing = true;
       
+      // Erase tool or right-click erases
+      const eraseMode = state.tool === 'erase' || isErase;
+      
       if (state.tool === 'fill') {
-        floodFill(x, y, isErase ? 0 : 1);
+        floodFill(x, y, eraseMode ? 0 : 1);
       } else {
-        setPx(x, y, isErase ? 0 : 1);
+        setPx(x, y, eraseMode ? 0 : 1);
       }
       lastX = x; lastY = y;
       draw();
@@ -759,9 +870,12 @@
         return;
       }
       
+      // Erase tool or right-click erases
+      const eraseMode = state.tool === 'erase' || isErase;
+      
       if (x !== lastX || y !== lastY) {
-        if (lastX >= 0) drawLine(lastX, lastY, x, y, isErase ? 0 : 1);
-        else setPx(x, y, isErase ? 0 : 1);
+        if (lastX >= 0) drawLine(lastX, lastY, x, y, eraseMode ? 0 : 1);
+        else setPx(x, y, eraseMode ? 0 : 1);
         lastX = x; lastY = y;
         draw();
       }
@@ -1582,10 +1696,18 @@
           }
         }
         else if (mod && e.key === 'v') {
-          // Paste - prioritize internal clipboard over image paste
+          // Paste from internal clipboard if we have one and no image is being pasted
+          // The paste event will handle images separately
           if (internalClipboard) {
-            e.preventDefault();
-            pasteFromInternalClipboard();
+            // Don't preventDefault - let paste event check for images first
+            // If paste event finds an image, it will handle it
+            // If not, we'll paste from internal clipboard via a timeout
+            setTimeout(() => {
+              // Only paste internal if modal isn't showing (no image was pasted)
+              if (!$('#clipboardModal').classList.contains('active')) {
+                pasteFromInternalClipboard();
+              }
+            }, 50);
           }
           // Otherwise let the paste event handler deal with images
         }
@@ -1628,18 +1750,14 @@
         }
       });
       
-      // Clipboard paste handler - check for image (only if no internal clipboard)
+      // Clipboard paste handler for images
       window.addEventListener('paste', async (e) => {
         // Skip if typing in inputs
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
           return;
         }
         
-        // If we have internal clipboard, that's handled by keydown
-        if (internalClipboard) {
-          return;
-        }
-        
+        // Check for image in clipboard
         const items = e.clipboardData?.items || [];
         for (const item of items) {
           if (item.type.startsWith('image/')) {
@@ -1666,13 +1784,7 @@
       $('#cancelClipboard').onclick = hideClipboardModal;
       $('#applyClipboard').onclick = applyClipboardToFrame;
       $('#pasteImageBtn').onclick = async () => {
-        // First check if we have internal clipboard to paste
-        if (internalClipboard) {
-          pasteFromInternalClipboard();
-          return;
-        }
-        
-        // Otherwise try to read image from system clipboard
+        // Try to read image from system clipboard
         try {
           const items = await navigator.clipboard.read();
           for (const item of items) {
