@@ -1026,35 +1026,23 @@
     }
     
     async function copySelectionToSystemClipboard(pixels2D) {
-      // Create a canvas with the selection
+      // Copy as text representation to system clipboard
+      // This clears any image from clipboard so paste won't get confused
       const width = pixels2D[0].length;
       const height = pixels2D.length;
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = width;
-      tempCanvas.height = height;
-      const ctx = tempCanvas.getContext('2d');
       
-      // Draw pixels (white on black for visibility)
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(0, 0, width, height);
-      ctx.fillStyle = '#ffffff';
-      
+      // Create a simple text representation
+      let text = `[MeshPet ${width}x${height}]\n`;
       for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
-          if (pixels2D[y][x]) {
-            ctx.fillRect(x, y, 1, 1);
-          }
+          text += pixels2D[y][x] ? '█' : '·';
         }
+        text += '\n';
       }
       
-      // Convert to blob and copy to clipboard
       try {
-        const blob = await new Promise(resolve => tempCanvas.toBlob(resolve, 'image/png'));
-        await navigator.clipboard.write([
-          new ClipboardItem({ 'image/png': blob })
-        ]);
+        await navigator.clipboard.writeText(text);
       } catch (err) {
-        // Silently fail if clipboard write fails (e.g., permission denied)
         console.log('Could not copy to system clipboard:', err);
       }
     }
@@ -1732,20 +1720,8 @@
           }
         }
         else if (mod && e.key === 'v') {
-          // Paste from internal clipboard if we have one and no image is being pasted
-          // The paste event will handle images separately
-          if (internalClipboard) {
-            // Don't preventDefault - let paste event check for images first
-            // If paste event finds an image, it will handle it
-            // If not, we'll paste from internal clipboard via a timeout
-            setTimeout(() => {
-              // Only paste internal if modal isn't showing (no image was pasted)
-              if (!$('#clipboardModal').classList.contains('active')) {
-                pasteFromInternalClipboard();
-              }
-            }, 50);
-          }
-          // Otherwise let the paste event handler deal with images
+          // Let the paste event handler deal with it - it will check for images
+          // and fall back to internal clipboard if appropriate
         }
         else if (e.key === 'Escape') {
           // Cancel selection or commit it
@@ -1793,7 +1769,7 @@
           return;
         }
         
-        // Check for image in clipboard
+        // Check for image in clipboard - if there's an image, it's from external source
         const items = e.clipboardData?.items || [];
         for (const item of items) {
           if (item.type.startsWith('image/')) {
@@ -1802,6 +1778,12 @@
             await processClipboardImage(blob);
             return;
           }
+        }
+        
+        // No image in clipboard - paste from internal clipboard if available
+        if (internalClipboard) {
+          e.preventDefault();
+          pasteFromInternalClipboard();
         }
       });
       
