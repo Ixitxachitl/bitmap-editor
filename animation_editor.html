@@ -881,8 +881,9 @@
       if (selection.floatingPixels) {
         // Copy floating pixels
         internalClipboard = selection.floatingPixels.map(row => [...row]);
+        toast(`Copied ${internalClipboard[0].length}×${internalClipboard.length} pixels`);
       } else {
-        // Copy from canvas
+        // Copy from canvas (marquee selection)
         const minX = Math.min(selection.startX, selection.endX);
         const minY = Math.min(selection.startY, selection.endY);
         const maxX = Math.max(selection.startX, selection.endX);
@@ -898,15 +899,14 @@
             const px = minX + dx;
             const py = minY + dy;
             if (px >= 0 && px < state.w && py >= 0 && py < state.h) {
-              internalClipboard[dy][dx] = pixels[py * state.w + px];
+              internalClipboard[dy][dx] = pixels[py * state.w + px] ? 1 : 0;
             } else {
               internalClipboard[dy][dx] = 0;
             }
           }
         }
+        toast(`Copied ${width}×${height} pixels`);
       }
-      
-      toast('Copied to clipboard');
     }
     
     function cutSelection() {
@@ -1558,6 +1558,12 @@
       
       // Keyboard shortcuts
       window.addEventListener('keydown', (e) => {
+        // Don't handle shortcuts when typing in inputs
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+          // Allow only Escape in inputs
+          if (e.key !== 'Escape') return;
+        }
+        
         const mod = e.ctrlKey || e.metaKey;
         if (mod && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
         else if (mod && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
@@ -1574,6 +1580,14 @@
             e.preventDefault();
             cutSelection();
           }
+        }
+        else if (mod && e.key === 'v') {
+          // Paste - prioritize internal clipboard over image paste
+          if (internalClipboard) {
+            e.preventDefault();
+            pasteFromInternalClipboard();
+          }
+          // Otherwise let the paste event handler deal with images
         }
         else if (e.key === 'Escape') {
           // Cancel selection or commit it
@@ -1614,25 +1628,26 @@
         }
       });
       
-      // Clipboard paste handler - check for image, otherwise use internal clipboard
+      // Clipboard paste handler - check for image (only if no internal clipboard)
       window.addEventListener('paste', async (e) => {
-        const items = e.clipboardData?.items || [];
-        let hasImage = false;
+        // Skip if typing in inputs
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+          return;
+        }
         
+        // If we have internal clipboard, that's handled by keydown
+        if (internalClipboard) {
+          return;
+        }
+        
+        const items = e.clipboardData?.items || [];
         for (const item of items) {
           if (item.type.startsWith('image/')) {
-            hasImage = true;
             e.preventDefault();
             const blob = item.getAsFile();
             await processClipboardImage(blob);
             return;
           }
-        }
-        
-        // No image in clipboard - use internal clipboard if available
-        if (!hasImage && internalClipboard) {
-          e.preventDefault();
-          pasteFromInternalClipboard();
         }
       });
       
