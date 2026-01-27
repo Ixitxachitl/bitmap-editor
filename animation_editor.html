@@ -1223,7 +1223,10 @@
       
       // Frame count defines (only for active animations)
       activeAnims.forEach(a => {
-        const defName = a.name.replace(/^pet/, 'PET_').replace(/([A-Z])/g, '_$1').toUpperCase().replace(/__/g, '_') + '_FRAMES';
+        // Convert petIdle -> PET_IDLE, petHappy -> PET_HAPPY, etc.
+        const baseName = a.name.replace(/^pet/, ''); // Remove 'pet' prefix: petIdle -> Idle
+        const snakeName = baseName.replace(/([a-z])([A-Z])/g, '$1_$2'); // Insert underscore before caps: Idle -> Idle (no change), happyDance -> happy_Dance
+        const defName = 'PET_' + snakeName.toUpperCase() + '_FRAMES'; // PET_IDLE_FRAMES
         out += `#define ${defName} ${a.frames.length}\n`;
       });
       
@@ -1239,6 +1242,13 @@
           const hex = icon.bytes.map(b => '0x' + b.toString(16).toUpperCase().padStart(2, '0')).join(', ');
           if (icon.comment) {
             out += `// ${icon.name} - ${icon.comment}\n`;
+          }
+          // Output width/height constants if available
+          if (icon.width !== null && icon.width !== undefined) {
+            out += `const uint8_t ${icon.name}_width = ${icon.width};\n`;
+          }
+          if (icon.height !== null && icon.height !== undefined) {
+            out += `const uint8_t ${icon.name}_height = ${icon.height};\n`;
           }
           out += `const uint8_t ${icon.name}[] PROGMEM = {${hex}};\n\n`;
         });
@@ -1345,6 +1355,18 @@
         comments[name] = match[2].trim();
       }
       
+      // Parse width/height constants for static icons
+      // Matches: const int name_width = 8; or const int16_t name_width = 8;
+      const iconDimensionRegex = /const\s+(?:int|int16_t|uint8_t)\s+(\w+)_(width|height)\s*=\s*(\d+)/g;
+      const iconDimensions = {};
+      while ((match = iconDimensionRegex.exec(content)) !== null) {
+        const iconName = match[1];
+        const dimType = match[2]; // 'width' or 'height'
+        const value = parseInt(match[3]);
+        if (!iconDimensions[iconName]) iconDimensions[iconName] = {};
+        iconDimensions[iconName][dimType] = value;
+      }
+      
       // Find standalone icons (frames not part of any animation)
       state.staticIcons = [];
       Object.keys(frames).forEach(frameName => {
@@ -1357,10 +1379,15 @@
           
           if (!isNumberedFrame || !hasFramesArray) {
             // This is a standalone icon
+            // Try to find dimensions - check for exact name match
+            // iconDimensions has keys like 'lvl_icon' from 'lvl_icon_width'
+            const dims = iconDimensions[frameName] || {};
             state.staticIcons.push({
               name: frameName,
               bytes: frames[frameName],
-              comment: comments[frameName.toLowerCase()] || ''
+              comment: comments[frameName.toLowerCase()] || '',
+              width: dims.width || null,
+              height: dims.height || null
             });
           }
         }
