@@ -38,6 +38,26 @@
     .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;}
     /* nicer import layout */
     .import-grid{display:grid;grid-template-columns:1fr;gap:10px}
+    
+    /* Selection overlay */
+    .selection-overlay{position:absolute;border:2px dashed var(--accent);background:rgba(124,144,255,0.1);pointer-events:none;box-sizing:border-box}
+    .canvas-wrapper{position:relative;display:inline-block}
+    canvas.move-cursor{cursor:move}
+    
+    /* Clipboard import modal */
+    .modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);display:none;align-items:center;justify-content:center;z-index:1000}
+    .modal-overlay.active{display:flex}
+    .modal{background:var(--panel);border:1px solid #222a3a;border-radius:16px;padding:20px;max-width:500px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.4)}
+    .modal h3{margin:0 0 15px;font-size:16px;color:var(--text)}
+    .modal-preview{display:flex;gap:15px;margin:15px 0}
+    .modal-preview canvas{border:1px solid #2a3a50;border-radius:8px;image-rendering:pixelated}
+    .modal-preview-label{font-size:11px;color:var(--muted);margin-bottom:5px}
+    .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:15px}
+    .threshold-control{margin:10px 0}
+    .threshold-control label{display:flex;align-items:center;gap:10px}
+    .threshold-control input[type="range"]{flex:1}
+    .btn.small{padding:5px 8px;font-size:11px}
+    .btn.active{background:#2d3a5a;border-color:var(--accent)}
 
     @media (max-width: 980px){
       .wrap{grid-template-columns:1fr}
@@ -89,6 +109,7 @@
                 <option value="circle">Circle</option>
                 <option value="disc">Filled Circle</option>
                 <option value="fill">Flood Fill</option>
+                <option value="select">Select</option>
               </select>
             </div>
           </div>
@@ -182,6 +203,7 @@
           </div>
           <div class="row">
             <button id="importBtn" class="btn">Import</button>
+            <button id="pasteImageBtn" class="btn">📋 Paste Image</button>
           </div>
           <div class="legend">Import is now separate from the live editor to keep things tidy. Defaults to <strong>LSB first</strong>.</div>
         </div>
@@ -194,9 +216,12 @@
       <div class="body">
         <div class="gridWrap">
           <div>
-            <canvas id="grid" width="384" height="384"></canvas>
+            <div class="canvas-wrapper" id="canvasWrapper">
+              <canvas id="grid" width="384" height="384"></canvas>
+              <div class="selection-overlay" id="selectionOverlay" style="display:none"></div>
+            </div>
             <div style="height:10px"></div>
-            <div class="legend">Left‑click: draw • Right‑click: erase • Hold Shift: straight line • Ctrl/Cmd+Z: undo • Ctrl/Cmd+Y or Shift+Ctrl/Cmd+Z: redo</div>
+            <div class="legend">Left‑click: draw • Right‑click: erase • Ctrl+C/X/V: copy/cut/paste • Ctrl+Z/Y: undo/redo</div>
           </div>
           <div>
             <details open>
@@ -211,6 +236,41 @@
     </section>
   </div>
 
+  <!-- Clipboard Import Modal -->
+  <div class="modal-overlay" id="clipboardModal">
+    <div class="modal">
+      <h3>📋 Import Image from Clipboard</h3>
+      <div class="modal-preview">
+        <div>
+          <div class="modal-preview-label">Original</div>
+          <canvas id="clipboardOriginal" width="96" height="96"></canvas>
+        </div>
+        <div>
+          <div class="modal-preview-label">Binary Preview (<span id="previewSize"></span>)</div>
+          <canvas id="clipboardBinary" width="96" height="96"></canvas>
+        </div>
+      </div>
+      <div class="threshold-control">
+        <label>
+          <span style="font-size:12px;min-width:70px">Threshold:</span>
+          <input type="range" id="thresholdSlider" min="0" max="255" value="128"/>
+          <span id="thresholdValue" style="font-size:12px;min-width:30px">128</span>
+        </label>
+      </div>
+      <div class="threshold-control">
+        <label>
+          <input type="checkbox" id="invertImport"/>
+          <span style="font-size:12px">Invert colors</span>
+        </label>
+      </div>
+      <div class="legend" style="margin:8px 0">Image will be pasted at original size as a movable selection.</div>
+      <div class="modal-actions">
+        <button class="btn" id="cancelClipboard">Cancel</button>
+        <button class="btn primary" id="applyClipboard">Paste as Selection</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     // --- Model ---
     const state = {
@@ -221,6 +281,22 @@
       gridLines: true,
       dragToDraw: true,
     };
+
+    // Selection state
+    let selection = {
+      active: false,
+      startX: 0, startY: 0,
+      endX: 0, endY: 0,
+      dragging: false,
+      dragOffsetX: 0, dragOffsetY: 0,
+      floatingPixels: null
+    };
+
+    // Clipboard state
+    let internalClipboard = null;
+    let clipboardImage = null;
+    let clipboardThreshold = 128;
+    let clipboardInvert = false;
 
     const $ = sel => document.querySelector(sel);
     const $$ = sel => Array.from(document.querySelectorAll(sel));
@@ -251,6 +327,7 @@
     const ih = $('#ih');
     const ibitOrder = $('#ibitOrder');
     const ipadRows = $('#ipadRows');
+    const selectionOverlay = $('#selectionOverlay');
 
     // History stacks
     const undoStack = [];
@@ -288,13 +365,13 @@
     }
 
     // Buttons
-    $('#newBtn').onclick = () => { pushHistory(); setSize(24,24); clearPixels(); draw(); };
+    $('#newBtn').onclick = () => { pushHistory(); clearSelection(); setSize(24,24); clearPixels(); draw(); };
     $('#clearBtn').onclick = () => { pushHistory(); clearPixels(); draw(); };
-    $('#invertBtn').onclick = () => { pushHistory(); mapPixels(v=>v?0:1); draw(); };
-    $('#flipHBtn').onclick = () => { pushHistory(); flip(true,false); draw(); };
-    $('#flipVBtn').onclick = () => { pushHistory(); flip(false,true); draw(); };
-    $('#rotLBtn').onclick = () => { pushHistory(); rotate(-90); draw(); };
-    $('#rotRBtn').onclick = () => { pushHistory(); rotate(90); draw(); };
+    $('#invertBtn').onclick = () => { pushHistory(); invertPixels(); draw(); };
+    $('#flipHBtn').onclick = () => { pushHistory(); flipHorizontal(); draw(); };
+    $('#flipVBtn').onclick = () => { pushHistory(); flipVertical(); draw(); };
+    $('#rotLBtn').onclick = () => { pushHistory(); rotateSelection(-90); draw(); };
+    $('#rotRBtn').onclick = () => { pushHistory(); rotateSelection(90); draw(); };
     $('#undoBtn').onclick = () => undo();
     $('#redoBtn').onclick = () => redo();
 
@@ -323,16 +400,86 @@
     wIn.oninput = () => { pushHistory(); setSize(+wIn.value, state.h); };
     hIn.oninput = () => { pushHistory(); setSize(state.w, +hIn.value); };
     zoomIn.oninput = () => { state.zoom = +zoomIn.value; resizeCanvas(); draw(); };
-    brushSel.oninput = () => state.brush = brushSel.value;
+    brushSel.oninput = () => { 
+      // Commit selection when switching away from select tool
+      if (state.brush === 'select' && brushSel.value !== 'select') {
+        if (selection.floatingPixels) { commitSelection(); }
+        else { clearSelection(); }
+      }
+      state.brush = brushSel.value; 
+      draw();
+    };
     gridToggle.oninput = () => { state.gridLines = gridToggle.checked; draw(); };
     dragToggle.oninput = () => { state.dragToDraw = dragToggle.checked; };
 
-    // Keyboard shortcuts (Undo/Redo)
+    // Keyboard shortcuts
     window.addEventListener('keydown', (e)=>{
+      // Don't handle shortcuts when typing in inputs
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+        if (e.key !== 'Escape') return;
+      }
+      
       const key = e.key.toLowerCase();
       const mod = e.ctrlKey || e.metaKey;
       if(mod && key === 'z' && !e.shiftKey){ e.preventDefault(); undo(); }
       else if( (mod && key === 'y') || (mod && key === 'z' && e.shiftKey) ) { e.preventDefault(); redo(); }
+      else if (mod && key === 'c') {
+        if (selection.active) { e.preventDefault(); copySelection(); }
+      }
+      else if (mod && key === 'x') {
+        if (selection.active) { e.preventDefault(); cutSelection(); }
+      }
+      else if (mod && key === 'v') {
+        // Let paste event handle it
+      }
+      else if (e.key === 'Escape') {
+        if (selection.floatingPixels) { commitSelection(); }
+        else { clearSelection(); }
+        draw();
+      }
+      else if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selection.active) {
+          e.preventDefault();
+          pushHistory();
+          if (selection.floatingPixels) {
+            selection.floatingPixels = null;
+          } else {
+            const minX = Math.min(selection.startX, selection.endX);
+            const minY = Math.min(selection.startY, selection.endY);
+            const maxX = Math.max(selection.startX, selection.endX);
+            const maxY = Math.max(selection.startY, selection.endY);
+            for (let y = minY; y <= maxY; y++) {
+              for (let x = minX; x <= maxX; x++) {
+                if (x >= 0 && x < state.w && y >= 0 && y < state.h) {
+                  state.pixels[y * state.w + x] = 0;
+                }
+              }
+            }
+          }
+          clearSelection();
+          draw();
+        }
+      }
+    });
+    
+    // Clipboard paste handler
+    window.addEventListener('paste', async (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      
+      const items = e.clipboardData?.items || [];
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          e.preventDefault();
+          const blob = item.getAsFile();
+          await processClipboardImage(blob);
+          return;
+        }
+      }
+      
+      if (internalClipboard) {
+        e.preventDefault();
+        pasteFromInternalClipboard();
+      }
     });
 
     // init
@@ -359,6 +506,112 @@
 
     function clearPixels(){ state.pixels = new Array(state.w*state.h).fill(0); }
     function mapPixels(fn){ state.pixels = state.pixels.map(fn); }
+
+    // Selection-aware transforms
+    function invertPixels() {
+      if (selection.active) {
+        if (selection.floatingPixels) {
+          for (let dy = 0; dy < selection.floatingPixels.length; dy++) {
+            for (let dx = 0; dx < selection.floatingPixels[dy].length; dx++) {
+              selection.floatingPixels[dy][dx] = selection.floatingPixels[dy][dx] ? 0 : 1;
+            }
+          }
+        } else {
+          const minX = Math.min(selection.startX, selection.endX);
+          const minY = Math.min(selection.startY, selection.endY);
+          const maxX = Math.max(selection.startX, selection.endX);
+          const maxY = Math.max(selection.startY, selection.endY);
+          for (let y = minY; y <= maxY; y++) {
+            for (let x = minX; x <= maxX; x++) {
+              if (x >= 0 && x < state.w && y >= 0 && y < state.h) {
+                const i = y * state.w + x;
+                state.pixels[i] = state.pixels[i] ? 0 : 1;
+              }
+            }
+          }
+        }
+      } else {
+        mapPixels(v => v ? 0 : 1);
+      }
+    }
+
+    function flipHorizontal() {
+      if (selection.active) {
+        if (selection.floatingPixels) {
+          selection.floatingPixels = selection.floatingPixels.map(row => [...row].reverse());
+        } else {
+          const minX = Math.min(selection.startX, selection.endX);
+          const minY = Math.min(selection.startY, selection.endY);
+          const maxX = Math.max(selection.startX, selection.endX);
+          const maxY = Math.max(selection.startY, selection.endY);
+          for (let y = minY; y <= maxY; y++) {
+            const row = [];
+            for (let x = minX; x <= maxX; x++) {
+              row.push(x >= 0 && x < state.w && y >= 0 && y < state.h ? state.pixels[y * state.w + x] : 0);
+            }
+            row.reverse();
+            for (let x = minX; x <= maxX; x++) {
+              if (x >= 0 && x < state.w && y >= 0 && y < state.h) {
+                state.pixels[y * state.w + x] = row[x - minX];
+              }
+            }
+          }
+        }
+      } else {
+        flip(true, false);
+      }
+    }
+
+    function flipVertical() {
+      if (selection.active) {
+        if (selection.floatingPixels) {
+          selection.floatingPixels = [...selection.floatingPixels].reverse();
+        } else {
+          const minX = Math.min(selection.startX, selection.endX);
+          const minY = Math.min(selection.startY, selection.endY);
+          const maxX = Math.max(selection.startX, selection.endX);
+          const maxY = Math.max(selection.startY, selection.endY);
+          const temp = [];
+          for (let y = minY; y <= maxY; y++) {
+            temp[y - minY] = [];
+            for (let x = minX; x <= maxX; x++) {
+              temp[y - minY][x - minX] = x >= 0 && x < state.w && y >= 0 && y < state.h ? state.pixels[y * state.w + x] : 0;
+            }
+          }
+          for (let y = minY; y <= maxY; y++) {
+            for (let x = minX; x <= maxX; x++) {
+              if (x >= 0 && x < state.w && y >= 0 && y < state.h) {
+                state.pixels[y * state.w + x] = temp[maxY - y][x - minX];
+              }
+            }
+          }
+        }
+      } else {
+        flip(false, true);
+      }
+    }
+
+    function rotateSelection(deg) {
+      if (selection.active && selection.floatingPixels) {
+        const times = ((deg % 360) + 360) % 360 / 90 | 0;
+        for (let t = 0; t < times; t++) {
+          const H = selection.floatingPixels.length;
+          const W = selection.floatingPixels[0].length;
+          const newPixels = [];
+          for (let y = 0; y < W; y++) {
+            newPixels[y] = [];
+            for (let x = 0; x < H; x++) {
+              newPixels[y][x] = selection.floatingPixels[H - 1 - x][y];
+            }
+          }
+          selection.floatingPixels = newPixels;
+          selection.endX = selection.startX + newPixels[0].length - 1;
+          selection.endY = selection.startY + newPixels.length - 1;
+        }
+      } else if (!selection.active) {
+        rotate(deg);
+      }
+    }
 
     function flip(h,v){
       const out = new Array(state.w*state.h).fill(0);
@@ -400,12 +653,33 @@
           g.fillRect(x*z, y*z, z, z);
         }
       }
+      
+      // Draw floating selection pixels
+      if (selection.floatingPixels && selection.active) {
+        for (let dy = 0; dy < selection.floatingPixels.length; dy++) {
+          for (let dx = 0; dx < selection.floatingPixels[dy].length; dx++) {
+            const px = selection.startX + dx;
+            const py = selection.startY + dy;
+            if (px >= 0 && px < state.w && py >= 0 && py < state.h) {
+              if (selection.floatingPixels[dy][dx]) {
+                g.fillStyle = '#7cffb0';
+                g.fillRect(px * z, py * z, z, z);
+              }
+            }
+          }
+        }
+      }
+      
       if(state.gridLines){
         g.strokeStyle = '#2b3245'; g.lineWidth = 1; g.beginPath();
         for(let x=0;x<=state.w;x++){ g.moveTo(x*z+0.5,0); g.lineTo(x*z+0.5,grid.height); }
         for(let y=0;y<=state.h;y++){ g.moveTo(0,y*z+0.5); g.lineTo(grid.width,y*z+0.5); }
         g.stroke();
       }
+      
+      // Draw selection overlay
+      drawSelectionOverlay();
+      
       // preview
       const P = Math.max(1, Math.floor(120 / Math.max(state.w,state.h)));
       preview.width = state.w*P; preview.height = state.h*P;
@@ -415,19 +689,215 @@
         gp.fillRect(x*P,y*P,P,P);
       }
     }
+    
+    function drawSelectionOverlay() {
+      if (!selection.active || state.brush !== 'select') {
+        selectionOverlay.style.display = 'none';
+        return;
+      }
+      
+      const z = state.zoom;
+      let minX, minY, width, height;
+      
+      if (selection.floatingPixels) {
+        minX = selection.startX;
+        minY = selection.startY;
+        width = selection.floatingPixels[0].length;
+        height = selection.floatingPixels.length;
+      } else {
+        minX = Math.min(selection.startX, selection.endX);
+        minY = Math.min(selection.startY, selection.endY);
+        width = Math.abs(selection.endX - selection.startX) + 1;
+        height = Math.abs(selection.endY - selection.startY) + 1;
+      }
+      
+      selectionOverlay.style.display = 'block';
+      selectionOverlay.style.left = (minX * z) + 'px';
+      selectionOverlay.style.top = (minY * z) + 'px';
+      selectionOverlay.style.width = (width * z) + 'px';
+      selectionOverlay.style.height = (height * z) + 'px';
+    }
+    
+    // Selection functions
+    function isInsideSelection(x, y) {
+      if (!selection.active) return false;
+      let minX, minY, maxX, maxY;
+      if (selection.floatingPixels) {
+        minX = selection.startX;
+        minY = selection.startY;
+        maxX = selection.startX + selection.floatingPixels[0].length - 1;
+        maxY = selection.startY + selection.floatingPixels.length - 1;
+      } else {
+        minX = Math.min(selection.startX, selection.endX);
+        minY = Math.min(selection.startY, selection.endY);
+        maxX = Math.max(selection.startX, selection.endX);
+        maxY = Math.max(selection.startY, selection.endY);
+      }
+      return x >= minX && x <= maxX && y >= minY && y <= maxY;
+    }
+    
+    function liftSelection() {
+      const minX = Math.min(selection.startX, selection.endX);
+      const minY = Math.min(selection.startY, selection.endY);
+      const maxX = Math.max(selection.startX, selection.endX);
+      const maxY = Math.max(selection.startY, selection.endY);
+      const width = maxX - minX + 1;
+      const height = maxY - minY + 1;
+      
+      selection.floatingPixels = [];
+      for (let dy = 0; dy < height; dy++) {
+        selection.floatingPixels[dy] = [];
+        for (let dx = 0; dx < width; dx++) {
+          const px = minX + dx;
+          const py = minY + dy;
+          if (px >= 0 && px < state.w && py >= 0 && py < state.h) {
+            selection.floatingPixels[dy][dx] = state.pixels[py * state.w + px];
+            state.pixels[py * state.w + px] = 0;
+          } else {
+            selection.floatingPixels[dy][dx] = 0;
+          }
+        }
+      }
+      selection.startX = minX;
+      selection.startY = minY;
+      selection.endX = maxX;
+      selection.endY = maxY;
+    }
+    
+    function commitSelection() {
+      if (!selection.floatingPixels) {
+        clearSelection();
+        return;
+      }
+      const minX = selection.startX;
+      const minY = selection.startY;
+      for (let dy = 0; dy < selection.floatingPixels.length; dy++) {
+        for (let dx = 0; dx < selection.floatingPixels[dy].length; dx++) {
+          const px = minX + dx;
+          const py = minY + dy;
+          if (px >= 0 && px < state.w && py >= 0 && py < state.h) {
+            if (selection.floatingPixels[dy][dx]) {
+              state.pixels[py * state.w + px] = 1;
+            }
+          }
+        }
+      }
+      clearSelection();
+      draw();
+    }
+    
+    function clearSelection() {
+      selection.active = false;
+      selection.floatingPixels = null;
+      selection.dragging = false;
+      selectionOverlay.style.display = 'none';
+    }
+    
+    function copySelection() {
+      if (!selection.active) { toast('No selection to copy'); return; }
+      if (selection.floatingPixels) {
+        internalClipboard = selection.floatingPixels.map(row => [...row]);
+      } else {
+        const minX = Math.min(selection.startX, selection.endX);
+        const minY = Math.min(selection.startY, selection.endY);
+        const maxX = Math.max(selection.startX, selection.endX);
+        const maxY = Math.max(selection.startY, selection.endY);
+        const width = maxX - minX + 1;
+        const height = maxY - minY + 1;
+        internalClipboard = [];
+        for (let dy = 0; dy < height; dy++) {
+          internalClipboard[dy] = [];
+          for (let dx = 0; dx < width; dx++) {
+            const px = minX + dx;
+            const py = minY + dy;
+            internalClipboard[dy][dx] = (px >= 0 && px < state.w && py >= 0 && py < state.h) ? (state.pixels[py * state.w + px] ? 1 : 0) : 0;
+          }
+        }
+      }
+      copySelectionToSystemClipboard(internalClipboard);
+      toast(`Copied ${internalClipboard[0].length}×${internalClipboard.length} pixels`);
+    }
+    
+    async function copySelectionToSystemClipboard(pixels2D) {
+      const width = pixels2D[0].length;
+      const height = pixels2D.length;
+      let text = `[Bitmap ${width}x${height}]\n`;
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          text += pixels2D[y][x] ? '█' : '·';
+        }
+        text += '\n';
+      }
+      try { await navigator.clipboard.writeText(text); } catch (err) {}
+    }
+    
+    function cutSelection() {
+      if (!selection.active) { toast('No selection to cut'); return; }
+      pushHistory();
+      if (!selection.floatingPixels) { liftSelection(); }
+      internalClipboard = selection.floatingPixels.map(row => [...row]);
+      selection.floatingPixels = null;
+      clearSelection();
+      draw();
+      toast('Cut to clipboard');
+    }
+    
+    function pasteFromInternalClipboard() {
+      if (!internalClipboard) { toast('Nothing to paste'); return; }
+      if (selection.floatingPixels) { commitSelection(); }
+      pushHistory();
+      selection.floatingPixels = internalClipboard.map(row => [...row]);
+      selection.startX = 0;
+      selection.startY = 0;
+      selection.endX = selection.floatingPixels[0].length - 1;
+      selection.endY = selection.floatingPixels.length - 1;
+      selection.active = true;
+      selection.dragging = false;
+      state.brush = 'select';
+      brushSel.value = 'select';
+      draw();
+      toast('Pasted - drag to position, Escape to commit');
+    }
 
     // --- Mouse interactions ---
-    let drawing = false, startPt=null, activeMode=null, shapeBase=null; // activeMode tracks right-click erase, etc.
+    let drawing = false, startPt=null, activeMode=null, shapeBase=null;
+    let selectStart = null;
     grid.addEventListener('contextmenu', e=>e.preventDefault());
 
     grid.addEventListener('mousedown', (e)=>{
       const {x,y} = eventToCell(e);
-      activeMode = (e.button===2) ? 'erase' : state.brush;   // remember button mode
+      activeMode = (e.button===2) ? 'erase' : state.brush;
+
+      // Selection tool
+      if (state.brush === 'select') {
+        if (selection.active && isInsideSelection(x, y)) {
+          selection.dragging = true;
+          selection.dragOffsetX = x - selection.startX;
+          selection.dragOffsetY = y - selection.startY;
+          if (!selection.floatingPixels) {
+            pushHistory();
+            liftSelection();
+          }
+          return;
+        } else {
+          if (selection.floatingPixels) { commitSelection(); }
+          selectStart = { x, y };
+          selection.startX = x;
+          selection.startY = y;
+          selection.endX = x;
+          selection.endY = y;
+          selection.active = true;
+          selection.floatingPixels = null;
+          drawing = true;
+          draw();
+          return;
+        }
+      }
 
       if(['line','rect','circle','disc'].includes(activeMode)){
         startPt = {x,y,mode: activeMode};
         shapeBase = state.pixels.slice();
-        pushHistory(); // one history entry for the whole gesture
+        pushHistory();
         drawing = true;
         return;
       }
@@ -435,13 +905,46 @@
       // freehand or erase/fill single click
       pushHistory();
       drawing = state.dragToDraw;
-      applyBrush(x,y, activeMode === 'erase' ? 'erase' : 'draw');
+      const eraseMode = state.brush === 'erase' || activeMode === 'erase';
+      applyBrush(x,y, eraseMode ? 'erase' : 'draw');
       draw();
     });
 
     grid.addEventListener('mousemove', (e)=>{
-      if(!drawing) return;
       const {x,y} = eventToCell(e);
+      
+      // Update cursor for selection
+      if (state.brush === 'select' && selection.active && !drawing) {
+        if (isInsideSelection(x, y)) {
+          grid.classList.add('move-cursor');
+        } else {
+          grid.classList.remove('move-cursor');
+        }
+      } else if (state.brush !== 'select') {
+        grid.classList.remove('move-cursor');
+      }
+      
+      // Selection dragging
+      if (state.brush === 'select' && selection.dragging) {
+        selection.startX = x - selection.dragOffsetX;
+        selection.startY = y - selection.dragOffsetY;
+        if (selection.floatingPixels) {
+          selection.endX = selection.startX + selection.floatingPixels[0].length - 1;
+          selection.endY = selection.startY + selection.floatingPixels.length - 1;
+        }
+        draw();
+        return;
+      }
+      
+      // Selection box drawing
+      if (state.brush === 'select' && drawing && selectStart) {
+        selection.endX = x;
+        selection.endY = y;
+        draw();
+        return;
+      }
+      
+      if(!drawing) return;
 
       if(startPt && ['line','rect','circle','disc'].includes(startPt.mode)){
         // rubber-band by restoring snapshot then committing the shape
@@ -457,11 +960,18 @@
       }
 
       // freehand
-      applyBrush(x,y, activeMode === 'erase' ? 'erase' : 'draw');
+      const eraseMode = state.brush === 'erase' || activeMode === 'erase';
+      applyBrush(x,y, eraseMode ? 'erase' : 'draw');
       draw();
     });
 
     window.addEventListener('mouseup', (e)=>{
+      if (state.brush === 'select') {
+        selection.dragging = false;
+        selectStart = null;
+        drawing = false;
+        return;
+      }
       startPt=null; drawing=false; activeMode=null; shapeBase=null;
     });
 
@@ -568,6 +1078,153 @@
       }
       draw(); toast('Imported '+bytes.length+' byte(s)');
     }
+
+    // Clipboard image import
+    async function processClipboardImage(blob) {
+      const img = new Image();
+      img.onload = () => {
+        clipboardImage = img;
+        showClipboardModal();
+      };
+      img.src = URL.createObjectURL(blob);
+    }
+    
+    function showClipboardModal() {
+      $('#clipboardModal').classList.add('active');
+      updateClipboardPreview();
+    }
+    
+    function hideClipboardModal() {
+      $('#clipboardModal').classList.remove('active');
+      clipboardImage = null;
+    }
+    
+    function updateClipboardPreview() {
+      if (!clipboardImage) return;
+      
+      const origCanvas = $('#clipboardOriginal');
+      const binCanvas = $('#clipboardBinary');
+      const origCtx = origCanvas.getContext('2d');
+      const binCtx = binCanvas.getContext('2d');
+      
+      const scale = Math.min(96 / clipboardImage.width, 96 / clipboardImage.height);
+      const scaledW = clipboardImage.width * scale;
+      const scaledH = clipboardImage.height * scale;
+      
+      origCanvas.width = 96;
+      origCanvas.height = 96;
+      origCtx.fillStyle = '#1a1a2e';
+      origCtx.fillRect(0, 0, 96, 96);
+      origCtx.drawImage(clipboardImage, (96 - scaledW) / 2, (96 - scaledH) / 2, scaledW, scaledH);
+      
+      const imgW = clipboardImage.width;
+      const imgH = clipboardImage.height;
+      const binaryPixels = convertImageToBinary(clipboardImage, clipboardThreshold, clipboardInvert);
+      
+      $('#previewSize').textContent = `${imgW}×${imgH}px`;
+      
+      binCanvas.width = 96;
+      binCanvas.height = 96;
+      binCtx.fillStyle = '#0f1115';
+      binCtx.fillRect(0, 0, 96, 96);
+      
+      const pxSize = Math.min(96 / imgW, 96 / imgH);
+      const offsetX = (96 - imgW * pxSize) / 2;
+      const offsetY = (96 - imgH * pxSize) / 2;
+      
+      for (let y = 0; y < imgH; y++) {
+        for (let x = 0; x < imgW; x++) {
+          if (binaryPixels[y][x]) {
+            binCtx.fillStyle = '#e5e9f0';
+            binCtx.fillRect(offsetX + x * pxSize, offsetY + y * pxSize, pxSize, pxSize);
+          }
+        }
+      }
+    }
+    
+    function convertImageToBinary(img, threshold, invert) {
+      const tempCanvas = document.createElement('canvas');
+      const imgW = img.width;
+      const imgH = img.height;
+      tempCanvas.width = imgW;
+      tempCanvas.height = imgH;
+      const ctx = tempCanvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const imageData = ctx.getImageData(0, 0, imgW, imgH);
+      const data = imageData.data;
+      
+      const pixels = [];
+      for (let y = 0; y < imgH; y++) {
+        pixels[y] = [];
+        for (let x = 0; x < imgW; x++) {
+          const i = (y * imgW + x) * 4;
+          const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+          let isOn = gray < threshold;
+          if (invert) isOn = !isOn;
+          pixels[y][x] = isOn ? 1 : 0;
+        }
+      }
+      return pixels;
+    }
+    
+    function applyClipboardToCanvas() {
+      if (!clipboardImage) return;
+      pushHistory();
+      
+      const binaryPixels = convertImageToBinary(clipboardImage, clipboardThreshold, clipboardInvert);
+      
+      selection.floatingPixels = binaryPixels;
+      selection.startX = 0;
+      selection.startY = 0;
+      selection.endX = binaryPixels[0].length - 1;
+      selection.endY = binaryPixels.length - 1;
+      selection.active = true;
+      selection.dragging = false;
+      
+      state.brush = 'select';
+      brushSel.value = 'select';
+      
+      hideClipboardModal();
+      draw();
+      toast('Image pasted - drag to position, Escape to commit');
+    }
+    
+    // Clipboard modal events
+    $('#thresholdSlider').oninput = () => {
+      clipboardThreshold = parseInt($('#thresholdSlider').value);
+      $('#thresholdValue').textContent = clipboardThreshold;
+      updateClipboardPreview();
+    };
+    
+    $('#invertImport').onchange = () => {
+      clipboardInvert = $('#invertImport').checked;
+      updateClipboardPreview();
+    };
+    
+    $('#cancelClipboard').onclick = hideClipboardModal;
+    $('#applyClipboard').onclick = applyClipboardToCanvas;
+    
+    $('#pasteImageBtn').onclick = async () => {
+      try {
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+          for (const type of item.types) {
+            if (type.startsWith('image/')) {
+              const blob = await item.getType(type);
+              await processClipboardImage(blob);
+              return;
+            }
+          }
+        }
+        toast('No image in clipboard');
+      } catch (err) {
+        toast('Clipboard access denied - use Ctrl+V');
+      }
+    };
+    
+    $('#clipboardModal').onclick = (e) => {
+      if (e.target === $('#clipboardModal')) hideClipboardModal();
+    };
 
     // Default packing order changed to LSB first
     function packBytes(order='lsb0', pad=true){
