@@ -105,8 +105,8 @@
           </div>
           <label>Emote Name (C identifier)</label>
           <input type="text" id="name" class="mono" placeholder="e.g. heart"/>
-          <label>Unicode Symbol</label>
-          <input id="symbol" type="text" placeholder="e.g. ❤️ or \u2764"/>
+          <label>Unicode Symbols (comma-separated)</label>
+          <input id="symbol" type="text" placeholder="e.g. ❤️, 💕, ♥️"/>
           <div class="controls" style="margin-top:10px">
             <div>
               <label>Width</label>
@@ -290,7 +290,7 @@
 
     // Emotes list - each emote stores its own pixel data
     let emotes = [
-      { name: 'heart', symbol: '❤️', w: 16, h: 16, pixels: new Array(16*16).fill(0) }
+      { name: 'heart', symbols: ['❤️'], w: 16, h: 16, pixels: new Array(16*16).fill(0) }
     ];
     let currentEmote = 0;
 
@@ -351,7 +351,8 @@
       e.w = state.w;
       e.h = state.h;
       e.name = nameIn.value || 'emote';
-      e.symbol = symbolIn.value || '';
+      // Parse symbols: split by comma, trim whitespace, filter empty
+      e.symbols = symbolIn.value.split(',').map(s => s.trim()).filter(s => s);
     }
 
     function loadEmote(index) {
@@ -363,7 +364,8 @@
       wIn.value = state.w;
       hIn.value = state.h;
       nameIn.value = e.name;
-      symbolIn.value = e.symbol;
+      // Display symbols array as comma-separated (handle legacy single symbol)
+      symbolIn.value = Array.isArray(e.symbols) ? e.symbols.join(', ') : (e.symbol || '');
       resizeCanvas();
       draw();
     }
@@ -381,7 +383,7 @@
       if (!name) return;
       emotes.push({
         name: name.replace(/\W/g, ''),
-        symbol: '',
+        symbols: [],
         w: 16,
         h: 16,
         pixels: new Array(16 * 16).fill(0)
@@ -463,7 +465,7 @@
       populateEmoteSelect();
     };
     symbolIn.oninput = () => {
-      emotes[currentEmote].symbol = symbolIn.value;
+      emotes[currentEmote].symbols = symbolIn.value.split(',').map(s => s.trim()).filter(s => s);
     };
 
     // Header buttons - file import/export
@@ -1547,14 +1549,21 @@
       code += '#ifndef EXCLUDE_EMOJI\n';
       emotes.forEach(emote => {
         const nm = emote.name.replace(/\W+/g, '_');
-        const sym = emote.symbol || '';
-        // Escape symbol for C string (handles all Unicode including emojis)
-        const symEscaped = [...sym].map(c => {
-          const cp = c.codePointAt(0);
-          return cp > 127 ? '\\U' + cp.toString(16).toUpperCase().padStart(8, '0') : c;
-        }).join('');
-        const comment = sym ? ` // ${sym} ${nm}` : '';
-        code += `    {"${symEscaped}", ${nm}, ${nm}_width, ${nm}_height},${comment}\n`;
+        // Get symbols array (handle legacy single symbol)
+        const syms = Array.isArray(emote.symbols) ? emote.symbols : (emote.symbol ? [emote.symbol] : ['']);
+        // Output one table entry per symbol variation
+        syms.forEach(sym => {
+          // Escape symbol for C string (handles all Unicode including emojis)
+          // Use \u for 4-digit codepoints (0000-FFFF), \U for larger (e.g. emoji)
+          const symEscaped = [...sym].map(c => {
+            const cp = c.codePointAt(0);
+            if (cp <= 127) return c;
+            if (cp <= 0xFFFF) return '\\u' + cp.toString(16).toUpperCase().padStart(4, '0');
+            return '\\U' + cp.toString(16).toUpperCase().padStart(8, '0');
+          }).join('');
+          const comment = sym ? ` // ${sym} ${nm}` : '';
+          code += `    {"${symEscaped}", ${nm}, ${nm}_width, ${nm}_height},${comment}\n`;
+        });
       });
       code += '#endif\n';
       code += '};\n\n';
@@ -1659,6 +1668,7 @@
       
       // Parse emote table for symbols and dimensions
       // Format: { "symbol", arrayName, widthVar, heightVar }
+      // Collect ALL symbol variations for each array name
       const emoteTableEntries = {};
       while ((match = emoteTableRegex.exec(text)) !== null) {
         // Convert escape sequences like \U0001F44D to actual emoji
@@ -1668,18 +1678,24 @@
         const arrayName = match[2];
         const widthVarName = match[3].replace(/_width$/, '');
         const heightVarName = match[4].replace(/_height$/, '');
-        emoteTableEntries[arrayName] = {
-          symbol,
-          widthKey: widthVarName,
-          heightKey: heightVarName
-        };
+        if (!emoteTableEntries[arrayName]) {
+          emoteTableEntries[arrayName] = {
+            symbols: [],
+            widthKey: widthVarName,
+            heightKey: heightVarName
+          };
+        }
+        // Add this symbol to the list if not already present
+        if (symbol && !emoteTableEntries[arrayName].symbols.includes(symbol)) {
+          emoteTableEntries[arrayName].symbols.push(symbol);
+        }
       }
       
       // Build emotes from parsed data
       for (const name of Object.keys(arrays)) {
         const bytes = arrays[name];
         let w = 16, h = 16;
-        let symbol = '';
+        let symbols = [];
         
         // First try direct name match for width/height
         if (widths[name]) w = widths[name];
@@ -1688,7 +1704,7 @@
         // Then check emote table for alternative width/height keys
         const tableEntry = emoteTableEntries[name];
         if (tableEntry) {
-          symbol = tableEntry.symbol;
+          symbols = tableEntry.symbols;
           if (widths[tableEntry.widthKey]) w = widths[tableEntry.widthKey];
           if (heights[tableEntry.heightKey]) h = heights[tableEntry.heightKey];
         }
@@ -1697,7 +1713,7 @@
         
         newEmotes.push({
           name: name,
-          symbol: symbol,
+          symbols: symbols,
           w: w,
           h: h,
           pixels: pixels
