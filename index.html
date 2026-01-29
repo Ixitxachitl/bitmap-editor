@@ -198,9 +198,10 @@
       <section class="card">
         <h2>📥 Import</h2>
         <div class="body">
-          <div class="row" style="margin-bottom:10px">
+          <div class="row" style="margin-bottom:4px">
             <button class="btn small" id="importFileBtn" style="flex:1">📂 Import emotes.cpp</button>
           </div>
+          <div class="legend" style="margin-bottom:10px">Tip: Select both .h and .cpp files for correct dimensions</div>
           <label>Or paste hex bytes</label>
           <textarea id="in" class="mono" style="min-height:50px" placeholder="0x00, 0x1C, ..."></textarea>
           <div class="controls" style="margin-top:8px">
@@ -1623,21 +1624,24 @@
       }, 100);
     }
 
-    // Import emotes from file
+    // Import emotes from file(s)
     function importEmotesFile() {
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = '.cpp,.h,.c,.txt';
+      input.multiple = true; // Allow selecting both .h and .cpp
       input.onchange = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const text = await file.text();
-        parseEmotesFile(text);
+        const files = Array.from(e.target.files);
+        if (files.length === 0) return;
+        // Combine all selected files' contents
+        const texts = await Promise.all(files.map(f => f.text()));
+        const combinedText = texts.join('\n');
+        parseEmotesFile(combinedText);
       };
       input.click();
     }
 
-    // Parse emotes.cpp format
+    // Parse emotes.cpp format (can include header content too)
     function parseEmotesFile(text) {
       const newEmotes = [];
       
@@ -1714,6 +1718,22 @@
           symbols = tableEntry.symbols;
           if (widths[tableEntry.widthKey]) w = widths[tableEntry.widthKey];
           if (heights[tableEntry.heightKey]) h = heights[tableEntry.heightKey];
+        }
+        
+        // Fallback: infer dimensions from byte count if not found
+        // Assumes square bitmap with row padding (bytes per row = ceil(w/8))
+        // Common sizes: 16x16=32 bytes, 24x24=72 bytes, 32x32=128 bytes
+        if (!widths[name] && !heights[name] && !tableEntry) {
+          const byteCount = bytes.length;
+          // Try common square sizes first
+          const commonSizes = [8, 12, 16, 20, 24, 28, 32, 48, 64];
+          for (const size of commonSizes) {
+            const bytesPerRow = Math.ceil(size / 8);
+            if (bytesPerRow * size === byteCount) {
+              w = h = size;
+              break;
+            }
+          }
         }
         
         const pixels = unpackBytes(bytes, w, h, 'lsb0', true);
