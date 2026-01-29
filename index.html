@@ -1502,25 +1502,25 @@
       code += '{\n\n';
       
       // Emote struct definition
-      code += '// === Emote Structure ===\n';
+      code += '// === Emote List ===\n';
       code += 'struct Emote {\n';
-      code += '    const char *symbol;\n';
+      code += '    const char *label;\n';
       code += '    const unsigned char *bitmap;\n';
       code += '    int width;\n';
       code += '    int height;\n';
       code += '};\n\n';
       
       // Extern declarations for emote table
-      code += 'extern const Emote emotes[];\n';
-      code += 'extern const int NUM_EMOTES;\n\n';
+      code += 'extern const Emote emotes[/* numEmotes */];\n';
+      code += 'extern const int numEmotes;\n\n';
       
-      // Bitmap declarations with #define for width/height
+      // Bitmap declarations with #define for height/width (height first to match original)
       code += '#ifndef EXCLUDE_EMOJI\n';
       code += '// === Emote Bitmaps ===\n';
       emotes.forEach(emote => {
         const nm = emote.name.replace(/\W+/g, '_');
-        code += `#define ${nm}_width ${emote.w}\n`;
         code += `#define ${nm}_height ${emote.h}\n`;
+        code += `#define ${nm}_width ${emote.w}\n`;
         code += `extern const unsigned char ${nm}[]${pm};\n\n`;
       });
       code += '#endif // EXCLUDE_EMOJI\n\n';
@@ -1567,7 +1567,7 @@
       });
       code += '#endif\n';
       code += '};\n\n';
-      code += `const int NUM_EMOTES = sizeof(emotes) / sizeof(emotes[0]);\n\n`;
+      code += `const int numEmotes = sizeof(emotes) / sizeof(emotes[0]);\n\n`;
       
       // Generate each emote's bitmap data
       code += '#ifndef EXCLUDE_EMOJI\n';
