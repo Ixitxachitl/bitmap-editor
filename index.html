@@ -58,6 +58,15 @@
     .threshold-control input[type="range"]{flex:1}
     .btn.small{padding:5px 8px;font-size:11px}
     .btn.active{background:#2d3a5a;border-color:var(--accent)}
+    
+    /* Tool tiles */
+    .tool-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0}
+    .tool-tile{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 4px;border:1px solid #2b3650;background:#202635;border-radius:10px;cursor:pointer;transition:all 0.15s ease}
+    .tool-tile:hover{background:#2a3448;border-color:#3a4a6a}
+    .tool-tile.active{background:#2d3a5a;border-color:var(--accent);box-shadow:0 0 8px rgba(124,144,255,0.3)}
+    .tool-tile .icon{font-size:18px;line-height:1;margin-bottom:4px}
+    .tool-tile .label{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px}
+    .tool-tile.active .label{color:var(--accent)}
 
     @media (max-width: 980px){
       .wrap{grid-template-columns:1fr}
@@ -99,19 +108,18 @@
               <label>Zoom</label>
               <input type="range" id="zoom" min="8" max="32" value="16"/>
             </div>
-            <div>
-              <label>Brush</label>
-              <select id="brush">
-                <option value="draw">Draw</option>
-                <option value="erase">Erase</option>
-                <option value="line">Line</option>
-                <option value="rect">Rect</option>
-                <option value="circle">Circle</option>
-                <option value="disc">Filled Circle</option>
-                <option value="fill">Flood Fill</option>
-                <option value="select">Select</option>
-              </select>
-            </div>
+          </div>
+          
+          <label>Tools</label>
+          <div class="tool-grid">
+            <div class="tool-tile active" data-tool="draw"><span class="icon">✏️</span><span class="label">Draw</span></div>
+            <div class="tool-tile" data-tool="erase"><span class="icon">🧹</span><span class="label">Erase</span></div>
+            <div class="tool-tile" data-tool="line"><span class="icon">📏</span><span class="label">Line</span></div>
+            <div class="tool-tile" data-tool="rect"><span class="icon">⬜</span><span class="label">Rect</span></div>
+            <div class="tool-tile" data-tool="circle"><span class="icon">⭕</span><span class="label">Circle</span></div>
+            <div class="tool-tile" data-tool="disc"><span class="icon">🔵</span><span class="label">Disc</span></div>
+            <div class="tool-tile" data-tool="fill"><span class="icon">🪣</span><span class="label">Fill</span></div>
+            <div class="tool-tile" data-tool="select"><span class="icon">⬚</span><span class="label">Select</span></div>
           </div>
 
           <div style="height:8px"></div>
@@ -310,7 +318,6 @@
     const wIn = $('#w');
     const hIn = $('#h');
     const zoomIn = $('#zoom');
-    const brushSel = $('#brush');
     const gridToggle = $('#gridToggle');
     const dragToggle = $('#dragToggle');
 
@@ -400,15 +407,23 @@
     wIn.oninput = () => { pushHistory(); setSize(+wIn.value, state.h); };
     hIn.oninput = () => { pushHistory(); setSize(state.w, +hIn.value); };
     zoomIn.oninput = () => { state.zoom = +zoomIn.value; resizeCanvas(); draw(); };
-    brushSel.oninput = () => { 
-      // Commit selection when switching away from select tool
-      if (state.brush === 'select' && brushSel.value !== 'select') {
-        if (selection.floatingPixels) { commitSelection(); }
-        else { clearSelection(); }
-      }
-      state.brush = brushSel.value; 
-      draw();
-    };
+    
+    // Tool tile click handlers
+    $$('[data-tool]').forEach(tile => {
+      tile.onclick = () => {
+        const newTool = tile.dataset.tool;
+        // Commit selection when switching away from select tool
+        if (state.brush === 'select' && newTool !== 'select') {
+          if (selection.floatingPixels) { commitSelection(); }
+          else { clearSelection(); }
+        }
+        state.brush = newTool;
+        $$('[data-tool]').forEach(t => t.classList.remove('active'));
+        tile.classList.add('active');
+        draw();
+      };
+    });
+    
     gridToggle.oninput = () => { state.gridLines = gridToggle.checked; draw(); };
     dragToggle.oninput = () => { state.dragToDraw = dragToggle.checked; };
 
@@ -608,7 +623,67 @@
           selection.endX = selection.startX + newPixels[0].length - 1;
           selection.endY = selection.startY + newPixels.length - 1;
         }
-      } else if (!selection.active) {
+      } else if (selection.active) {
+        // Rotate pixels within marquee selection
+        const minX = Math.min(selection.startX, selection.endX);
+        const minY = Math.min(selection.startY, selection.endY);
+        const maxX = Math.max(selection.startX, selection.endX);
+        const maxY = Math.max(selection.startY, selection.endY);
+        const W = maxX - minX + 1;
+        const H = maxY - minY + 1;
+        
+        // Extract pixels from selection
+        let pixels = [];
+        for (let y = 0; y < H; y++) {
+          pixels[y] = [];
+          for (let x = 0; x < W; x++) {
+            const px = minX + x, py = minY + y;
+            pixels[y][x] = (px >= 0 && px < state.w && py >= 0 && py < state.h) ? state.pixels[py * state.w + px] : 0;
+          }
+        }
+        
+        // Rotate the extracted pixels
+        const times = ((deg % 360) + 360) % 360 / 90 | 0;
+        for (let t = 0; t < times; t++) {
+          const oldH = pixels.length;
+          const oldW = pixels[0].length;
+          const newPixels = [];
+          for (let y = 0; y < oldW; y++) {
+            newPixels[y] = [];
+            for (let x = 0; x < oldH; x++) {
+              newPixels[y][x] = pixels[oldH - 1 - x][y];
+            }
+          }
+          pixels = newPixels;
+        }
+        
+        // Clear original selection area
+        for (let y = minY; y <= maxY; y++) {
+          for (let x = minX; x <= maxX; x++) {
+            if (x >= 0 && x < state.w && y >= 0 && y < state.h) {
+              state.pixels[y * state.w + x] = 0;
+            }
+          }
+        }
+        
+        // Write rotated pixels back (centered at same position)
+        const newH = pixels.length;
+        const newW = pixels[0].length;
+        for (let y = 0; y < newH; y++) {
+          for (let x = 0; x < newW; x++) {
+            const px = minX + x, py = minY + y;
+            if (px >= 0 && px < state.w && py >= 0 && py < state.h) {
+              state.pixels[py * state.w + px] = pixels[y][x];
+            }
+          }
+        }
+        
+        // Update selection bounds
+        selection.startX = minX;
+        selection.startY = minY;
+        selection.endX = minX + newW - 1;
+        selection.endY = minY + newH - 1;
+      } else {
         rotate(deg);
       }
     }
@@ -854,7 +929,8 @@
       selection.active = true;
       selection.dragging = false;
       state.brush = 'select';
-      brushSel.value = 'select';
+      $$('[data-tool]').forEach(t => t.classList.remove('active'));
+      $('[data-tool="select"]').classList.add('active');
       draw();
       toast('Pasted - drag to position, Escape to commit');
     }
@@ -1182,7 +1258,8 @@
       selection.dragging = false;
       
       state.brush = 'select';
-      brushSel.value = 'select';
+      $$('[data-tool]').forEach(t => t.classList.remove('active'));
+      $('[data-tool="select"]').classList.add('active');
       
       hideClipboardModal();
       draw();
