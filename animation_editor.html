@@ -14,8 +14,15 @@
     header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:var(--panel);border-bottom:1px solid #232a3a;gap:10px;flex-wrap:wrap}
     h1{font-size:18px;margin:0;font-weight:700;letter-spacing:.2px}
     h1 span{color:var(--accent)}
-    .wrap{display:grid;grid-template-columns: 320px 1fr 280px;gap:14px;padding:14px;min-height:calc(100vh - 60px)}
-    .col{display:grid;gap:14px;align-content:start}
+    .wrap{display:grid;grid-template-columns:var(--left-width, 280px) 6px 1fr 6px var(--right-width, 320px);gap:0;padding:14px;min-height:calc(100vh - 60px)}
+    .col{display:grid;gap:14px;align-content:start;padding:0 8px}
+    .col:first-child{padding-left:0}
+    .col:last-child{padding-right:0}
+    /* Resize handles */
+    .resize-handle{width:6px;background:transparent;cursor:col-resize;position:relative;transition:background 0.15s}
+    .resize-handle:hover,.resize-handle.dragging{background:#3a4a6a}
+    .resize-handle::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:2px;height:40px;background:#3a4a6a;border-radius:2px;opacity:0.5}
+    .resize-handle:hover::after,.resize-handle.dragging::after{opacity:1;background:var(--accent)}
     .card{background:var(--panel);border:1px solid #222a3a;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
     .card h2{font-size:13px;font-weight:700;margin:0;padding:10px 14px;border-bottom:1px solid #222a3a;color:#cbd5e1;display:flex;align-items:center;gap:8px}
     .card .body{padding:12px 14px}
@@ -23,18 +30,19 @@
     input[type="number"],input[type="text"],select,textarea{width:100%;padding:8px 10px;border-radius:8px;border:1px solid #243048;background:var(--panel-2);color:var(--text);font-family:inherit;font-size:12px}
     textarea{min-height:200px;resize:vertical}
     .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    .btn{appearance:none;border:1px solid #2b3650;background:#202635;color:var(--text);padding:7px 11px;border-radius:10px;font-weight:600;font-size:11px;cursor:pointer;white-space:nowrap}
+    .btn{appearance:none;border:1px solid #2b3650;background:#202635;color:var(--text);padding:8px 12px;border-radius:12px;font-weight:600;font-size:12px;cursor:pointer;white-space:nowrap}
     .btn:hover{filter:brightness(1.15)}
     .btn.primary{background:linear-gradient(180deg,#6378ff,#5a6df8);border-color:#5461de;color:white}
     .btn.ghost{background:transparent;border-color:#303a57}
     .btn.warn{background:#3b2a12;border-color:#5d3d12;color:#ffd68a}
     .btn.danger{background:#3c1c1c;border-color:#5b2323;color:#ffb4b4}
-    .btn.small{padding:5px 8px;font-size:10px}
+    .btn.small{padding:5px 8px;font-size:11px}
     .btn.active{background:#2d3a5a;border-color:var(--accent)}
-    canvas{background:var(--off);border:1px solid #252c3e;border-radius:10px;image-rendering:pixelated;cursor:crosshair}
+    canvas{background:var(--off);border:1px solid #252c3e;border-radius:12px;image-rendering:pixelated;cursor:crosshair}
     canvas.move-cursor{cursor:move}
-    .legend{font-size:11px;color:var(--muted);margin-top:8px}
+    .legend{font-size:12px;color:var(--muted);margin-top:8px}
     .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace}
+    .pill{display:inline-flex;align-items:center;gap:8px;border:1px dashed #334057;padding:8px 10px;border-radius:12px;background:#121827;color:#aab3c2;font-size:12px}
     
     /* Animation list */
     .anim-list{max-height:200px;overflow-y:auto;border:1px solid #243048;border-radius:8px;background:var(--panel-2)}
@@ -42,7 +50,7 @@
     .anim-item:hover{background:#232d42}
     .anim-item.selected{background:#2a3a5a;border-left:3px solid var(--accent)}
     .anim-item .name{font-weight:600}
-    .anim-item .count{color:var(--muted);font-size:10px}
+    .anim-item .count{color:var(--muted);font-size:11px}
     
     /* Frame strip */
     .frame-strip{display:flex;gap:6px;flex-wrap:wrap;padding:8px;background:var(--panel-2);border-radius:8px;min-height:60px;align-items:center}
@@ -58,7 +66,14 @@
     .playback-controls{display:flex;gap:8px;justify-content:center;margin-top:10px}
     
     /* Editor tools */
-    .tools{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+    .tool-grid{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+    .tool-tile{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 6px;border:1px solid #2b3650;background:#202635;border-radius:10px;cursor:pointer;transition:all 0.15s ease;flex:1 1 50px;min-width:50px;max-width:80px}
+    .tool-tile:hover{background:#2a3448;border-color:#3a4a6a}
+    .tool-tile.active{background:#2d3a5a;border-color:var(--accent);box-shadow:0 0 8px rgba(124,144,255,0.3)}
+    .tool-tile .icon{font-size:18px;line-height:1;margin-bottom:4px}
+    .tool-tile .label{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap}
+    .tool-tile.active .label{color:var(--accent)}
+    .tool-tile .sublabel{font-size:7px;color:var(--muted);opacity:0.7;white-space:nowrap}
     
     /* Selection overlay */
     .selection-overlay{position:absolute;border:2px dashed var(--accent);background:rgba(124,144,255,0.1);pointer-events:none;box-sizing:border-box}
@@ -78,22 +93,24 @@
     .threshold-control label{display:flex;align-items:center;gap:10px}
     .threshold-control input[type="range"]{flex:1}
     
-    @media(max-width:1100px){.wrap{grid-template-columns:1fr}}
+    @media(max-width:1100px){
+      .wrap{grid-template-columns:1fr !important}
+      .resize-handle{display:none}
+      .col{padding:0 !important}
+    }
   </style>
 </head>
 <body>
   <header>
     <h1>🐾 <span>MeshPet</span> Animation Editor</h1>
     <div class="row">
-      <button class="btn" id="importFileBtn">Import PetImages.h</button>
-      <button class="btn primary" id="exportBtn">Export PetImages.h</button>
-      <button class="btn" id="copyBtn">Copy to Clipboard</button>
+      <a href="index.html" class="btn ghost">🧩 Emote Editor</a>
     </div>
   </header>
 
   <div class="wrap">
-    <!-- Left: Animation & Frame Selection -->
-    <div class="col">
+    <!-- Left column: Animations + Frames + Tools -->
+    <div class="col" id="leftCol">
       <section class="card">
         <h2>🎬 Animations</h2>
         <div class="body">
@@ -125,16 +142,15 @@
       </section>
       
       <section class="card">
-        <h2>▶️ Preview</h2>
-        <div class="body preview-container">
-          <canvas id="preview" width="72" height="72"></canvas>
-          <div class="playback-controls">
-            <button class="btn small" id="playBtn">▶ Play</button>
-            <button class="btn small" id="stopBtn">⏹ Stop</button>
-            <label style="margin:0;display:flex;align-items:center;gap:4px">
-              <span>Speed:</span>
-              <input type="range" id="speedSlider" min="100" max="1000" value="300" style="width:80px"/>
-            </label>
+        <h2>🔧 Tools</h2>
+        <div class="body">
+          <div class="tool-grid">
+            <div class="tool-tile active" data-tool="draw" data-toggle="draw"><span class="icon">✏️</span><span class="label">Draw</span><span class="sublabel">L/R swap</span></div>
+            <div class="tool-tile" data-tool="line"><span class="icon">📏</span><span class="label">Line</span></div>
+            <div class="tool-tile" data-tool="rect" data-toggle="rect"><span class="icon">⬜</span><span class="label">Rect</span><span class="sublabel">outline</span></div>
+            <div class="tool-tile" data-tool="circle" data-toggle="circle"><span class="icon">⭕</span><span class="label">Circle</span><span class="sublabel">outline</span></div>
+            <div class="tool-tile" data-tool="fill"><span class="icon">🪣</span><span class="label">Fill</span></div>
+            <div class="tool-tile" data-tool="select"><span class="icon">⬚</span><span class="label">Select</span></div>
           </div>
         </div>
       </section>
@@ -152,28 +168,41 @@
               <input type="number" id="globalH" value="24" min="1" max="64"/>
             </div>
           </div>
+          <div class="row" style="margin-top:8px">
+            <span class="pill"><input id="gridToggle" type="checkbox" checked> <span>Grid</span></span>
+            <span class="pill"><input id="dragToggle" type="checkbox" checked> <span>Drag draw</span></span>
+          </div>
           <label>Zoom</label>
-          <input type="range" id="zoom" min="8" max="24" value="14"/>
+          <input type="range" id="zoom" min="8" max="32" value="14"/>
+          <div style="height:8px"></div>
+          <label>Bit Packing</label>
+          <select id="bitOrder">
+            <option value="lsb0" selected>LSB first (bit0=leftmost)</option>
+            <option value="msb0">MSB first (bit7=leftmost)</option>
+          </select>
+          <div style="height:8px"></div>
+          <div class="row">
+            <span class="pill"><input id="padRows" type="checkbox" checked> <span>Pad rows</span></span>
+            <span class="pill"><input id="progmem" type="checkbox" checked> <span>PROGMEM</span></span>
+          </div>
         </div>
       </section>
     </div>
+
+    <!-- Left resize handle -->
+    <div class="resize-handle" id="leftResizeHandle"></div>
 
     <!-- Center: Editor -->
     <section class="card">
       <h2>✏️ Editor</h2>
       <div class="body">
-        <div class="tools">
-          <button class="btn small active" data-tool="draw">Draw</button>
-          <button class="btn small" data-tool="erase">Erase</button>
-          <button class="btn small" data-tool="line">Line</button>
-          <button class="btn small" data-tool="rect">Rect</button>
-          <button class="btn small" data-tool="fill">Fill</button>
-          <button class="btn small" data-tool="select">Select</button>
-          <span style="border-left:1px solid #3a4a60;height:20px;margin:0 4px"></span>
+        <div class="row" style="margin-bottom:10px">
           <button class="btn small" id="clearBtn">Clear</button>
           <button class="btn small" id="invertBtn">Invert</button>
           <button class="btn small" id="flipHBtn">Flip H</button>
           <button class="btn small" id="flipVBtn">Flip V</button>
+          <button class="btn small" id="rotLBtn">↺</button>
+          <button class="btn small" id="rotRBtn">↻</button>
           <button class="btn small" id="undoBtn">Undo</button>
           <button class="btn small" id="redoBtn">Redo</button>
         </div>
@@ -185,28 +214,55 @@
       </div>
     </section>
 
-    <!-- Right: Output -->
-    <div class="col">
-      <section class="card" style="flex:1">
-        <h2>📄 Output</h2>
+    <!-- Right resize handle -->
+    <div class="resize-handle" id="rightResizeHandle"></div>
+
+    <!-- Right column: Preview + Import/Export -->
+    <div class="col" id="rightCol">
+      <section class="card">
+        <h2>▶️ Preview</h2>
+        <div class="body preview-container">
+          <canvas id="preview" width="72" height="72"></canvas>
+          <div class="playback-controls">
+            <button class="btn small" id="playBtn">▶ Play</button>
+            <button class="btn small" id="stopBtn">⏹ Stop</button>
+            <label style="margin:0;display:flex;align-items:center;gap:4px">
+              <span>Speed:</span>
+              <input type="range" id="speedSlider" min="100" max="1000" value="300" style="width:80px"/>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>📥 Import</h2>
         <div class="body">
-          <textarea id="output" class="mono" readonly placeholder="Generated code will appear here..."></textarea>
-          <div class="legend">This generates the complete PetImages.h file with all animations.</div>
+          <div class="row" style="margin-bottom:10px">
+            <button class="btn small" id="importFileBtn" style="flex:1">📂 Import PetImages.h</button>
+          </div>
+          <label>Or paste hex bytes</label>
+          <textarea id="importHex" class="mono" style="min-height:50px" placeholder="0x00, 0x1C, ..."></textarea>
+          <div class="row" style="margin-top:8px">
+            <button class="btn small" id="importFrameBtn">Import Hex</button>
+            <button class="btn small" id="pasteImageBtn">📋 Paste Image</button>
+          </div>
         </div>
       </section>
       
-      <section class="card">
-        <h2>📥 Import Frame</h2>
+      <section class="card" style="flex:1">
+        <h2>📤 Export</h2>
         <div class="body">
-          <label>Paste hex array</label>
-          <textarea id="importHex" class="mono" style="min-height:80px" placeholder="0x00, 0x1C, ..."></textarea>
+          <textarea id="output" class="mono" style="min-height:150px" readonly placeholder="Generated code will appear here..."></textarea>
           <div class="row" style="margin-top:8px">
-            <button class="btn small" id="importFrameBtn">Import to Current Frame</button>
+            <button class="btn small" id="exportBtn">Generate</button>
+            <button class="btn small" id="copyBtn">Copy</button>
           </div>
-          <div style="border-top:1px solid #2a3a50;margin:12px 0"></div>
-          <label>Paste image from clipboard</label>
-          <button class="btn small" id="pasteImageBtn" style="margin-top:6px">📋 Paste Image (Ctrl+V)</button>
-          <div class="legend">Paste any image to convert to binary bitmap</div>
+          <div class="row" style="margin-top:8px">
+            <button class="btn small primary" id="exportFileBtn" style="flex:1">📂 Export PetImages.h</button>
+          </div>
+          <div class="row" style="margin-top:8px">
+            <button class="btn small" id="copyAllBtn" style="flex:1">📋 Copy All Animations</button>
+          </div>
         </div>
       </section>
     </div>
@@ -288,7 +344,15 @@
       playing: false,
       playInterval: null,
       speed: 300,
-      staticIcons: [] // Non-animation images like expIcon
+      staticIcons: [], // Non-animation images like expIcon
+      drawInverted: false,  // When true, left click erases, right click draws
+      rectFilled: false,    // Toggle for filled rectangle
+      circleFilled: false,  // Toggle for filled circle
+      gridLines: true,      // Show grid lines
+      dragToDraw: true,     // Enable drag to draw
+      bitOrder: 'lsb0',     // LSB first (bit0=leftmost) or 'msb0'
+      padRows: true,        // Pad rows to byte boundary
+      progmem: true,        // Use PROGMEM keyword
     };
     
     // History
@@ -447,18 +511,20 @@
       }
       
       // Grid lines
-      g.strokeStyle = '#2b3245';
-      g.lineWidth = 1;
-      g.beginPath();
-      for (let x = 0; x <= state.w; x++) {
-        g.moveTo(x * z + 0.5, 0);
-        g.lineTo(x * z + 0.5, grid.height);
+      if (state.gridLines) {
+        g.strokeStyle = '#2b3245';
+        g.lineWidth = 1;
+        g.beginPath();
+        for (let x = 0; x <= state.w; x++) {
+          g.moveTo(x * z + 0.5, 0);
+          g.lineTo(x * z + 0.5, grid.height);
+        }
+        for (let y = 0; y <= state.h; y++) {
+          g.moveTo(0, y * z + 0.5);
+          g.lineTo(grid.width, y * z + 0.5);
+        }
+        g.stroke();
       }
-      for (let y = 0; y <= state.h; y++) {
-        g.moveTo(0, y * z + 0.5);
-        g.lineTo(grid.width, y * z + 0.5);
-      }
-      g.stroke();
       
       // Draw selection rectangle
       drawSelectionOverlay();
@@ -763,7 +829,13 @@
     
     grid.addEventListener('mousedown', e => {
       const { x, y } = eventToCell(e);
-      const isErase = e.button === 2;
+      const rightClick = e.button === 2;
+      
+      // Determine draw/erase based on click and inversion state
+      let isErase = rightClick;
+      if (state.tool === 'draw' && state.drawInverted) {
+        isErase = !rightClick;
+      }
       
       // Selection tool
       if (state.tool === 'select') {
@@ -798,7 +870,7 @@
         }
       }
       
-      if (state.tool === 'line' || state.tool === 'rect') {
+      if (state.tool === 'line' || state.tool === 'rect' || state.tool === 'circle') {
         lineStart = { x, y };
         shapeBase = currentPixels().slice();
         pushHistory();
@@ -809,13 +881,11 @@
       pushHistory();
       drawing = true;
       
-      // Erase tool or right-click erases
-      const eraseMode = state.tool === 'erase' || isErase;
-      
+      // Erase mode from tool inversion or right-click
       if (state.tool === 'fill') {
-        floodFill(x, y, eraseMode ? 0 : 1);
+        floodFill(x, y, isErase ? 0 : 1);
       } else {
-        setPx(x, y, eraseMode ? 0 : 1);
+        setPx(x, y, isErase ? 0 : 1);
       }
       lastX = x; lastY = y;
       draw();
@@ -859,11 +929,19 @@
       
       if (!drawing) return;
       
-      if (lineStart && (state.tool === 'line' || state.tool === 'rect')) {
+      // Determine erase mode for shape drawing
+      let isEraseMode = isErase;
+      if (state.tool === 'draw' && state.drawInverted) {
+        isEraseMode = !isErase;
+      }
+      
+      if (lineStart && (state.tool === 'line' || state.tool === 'rect' || state.tool === 'circle')) {
         currentAnim().frames[state.currentFrame] = shapeBase.slice();
-        const val = isErase ? 0 : 1;
+        const val = isEraseMode ? 0 : 1;
         if (state.tool === 'rect') {
-          drawRect(lineStart.x, lineStart.y, x, y, val);
+          drawRect(lineStart.x, lineStart.y, x, y, val, state.rectFilled);
+        } else if (state.tool === 'circle') {
+          drawCircle(lineStart.x, lineStart.y, x, y, val, state.circleFilled);
         } else {
           drawLine(lineStart.x, lineStart.y, x, y, val);
         }
@@ -871,12 +949,10 @@
         return;
       }
       
-      // Erase tool or right-click erases
-      const eraseMode = state.tool === 'erase' || isErase;
-      
-      if (x !== lastX || y !== lastY) {
-        if (lastX >= 0) drawLine(lastX, lastY, x, y, eraseMode ? 0 : 1);
-        else setPx(x, y, eraseMode ? 0 : 1);
+      // Freehand drawing
+      if (state.dragToDraw && (x !== lastX || y !== lastY)) {
+        if (lastX >= 0) drawLine(lastX, lastY, x, y, isEraseMode ? 0 : 1);
+        else setPx(x, y, isEraseMode ? 0 : 1);
         lastX = x; lastY = y;
         draw();
       }
@@ -1137,16 +1213,80 @@
       }
     }
     
-    function drawRect(x0, y0, x1, y1, val) {
+    function drawRect(x0, y0, x1, y1, val, filled = false) {
       const minX = Math.min(x0, x1), maxX = Math.max(x0, x1);
       const minY = Math.min(y0, y1), maxY = Math.max(y0, y1);
       for (let y = minY; y <= maxY; y++) {
         for (let x = minX; x <= maxX; x++) {
-          if (y === minY || y === maxY || x === minX || x === maxX) {
+          const isBorder = (y === minY || y === maxY || x === minX || x === maxX);
+          if (filled || isBorder) {
             setPx(x, y, val);
           }
         }
       }
+    }
+    
+    function drawCircle(x0, y0, x1, y1, val, filled = false) {
+      // Build inclusive bounding square
+      let minX = Math.min(x0, x1), maxX = Math.max(x0, x1);
+      let minY = Math.min(y0, y1), maxY = Math.max(y0, y1);
+      let w = (maxX - minX + 1), h = (maxY - minY + 1);
+      const side = Math.max(w, h);
+      maxX = minX + side - 1;
+      maxY = minY + side - 1;
+
+      // Floating-point center and radius
+      const cx = minX + side / 2;
+      const cy = minY + side / 2;
+      const R = side / 2;
+      const R2 = R * R;
+      const outlineLo2 = (R - 0.5) * (R - 0.5);
+      const outlineHi2 = (R + 0.5) * (R + 0.5);
+
+      for (let y = minY; y <= maxY; y++) {
+        for (let x = minX; x <= maxX; x++) {
+          const dx = (x + 0.5) - cx;
+          const dy = (y + 0.5) - cy;
+          const d2 = dx * dx + dy * dy;
+          if (filled) {
+            if (d2 <= R2 + 1e-9) setPx(x, y, val);
+          } else {
+            if (d2 >= outlineLo2 && d2 <= outlineHi2) setPx(x, y, val);
+          }
+        }
+      }
+    }
+    
+    function rotateLeft() {
+      pushHistory();
+      const pixels = currentPixels();
+      const W = state.w, H = state.h;
+      const out = new Array(W * H).fill(0);
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const nx = y, ny = W - 1 - x;
+          out[ny * H + nx] = pixels[y * W + x];
+        }
+      }
+      currentAnim().frames[state.currentFrame] = out;
+      draw();
+      generateOutput();
+    }
+    
+    function rotateRight() {
+      pushHistory();
+      const pixels = currentPixels();
+      const W = state.w, H = state.h;
+      const out = new Array(W * H).fill(0);
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const nx = H - 1 - y, ny = x;
+          out[ny * H + nx] = pixels[y * W + x];
+        }
+      }
+      currentAnim().frames[state.currentFrame] = out;
+      draw();
+      generateOutput();
     }
     
     // ============================================================================
@@ -1155,21 +1295,30 @@
     function packFrame(pixels) {
       const bytes = [];
       let cur = 0, count = 0;
+      const lsb = state.bitOrder === 'lsb0';
       for (let y = 0; y < state.h; y++) {
         for (let x = 0; x < state.w; x++) {
           const bit = pixels[y * state.w + x] ? 1 : 0;
-          cur |= (bit << count);
+          if (lsb) {
+            cur |= (bit << count);
+          } else {
+            cur |= (bit << (7 - count));
+          }
           count++;
           if (count === 8) {
             bytes.push(cur);
             cur = 0; count = 0;
           }
         }
-        // Pad row to byte boundary
-        if (count !== 0) {
+        // Pad row to byte boundary (if enabled)
+        if (state.padRows && count !== 0) {
           bytes.push(cur);
           cur = 0; count = 0;
         }
+      }
+      // Flush remaining bits if not padding rows
+      if (!state.padRows && count !== 0) {
+        bytes.push(cur);
       }
       return bytes;
     }
@@ -1202,6 +1351,8 @@
         }
         return false;
       });
+      
+      const pm = state.progmem ? ' PROGMEM' : '';
       
       let out = `#pragma once
 
@@ -1250,7 +1401,7 @@
           if (icon.height !== null && icon.height !== undefined) {
             out += `const uint8_t ${icon.name}_height = ${icon.height};\n`;
           }
-          out += `const uint8_t ${icon.name}[] PROGMEM = {${hex}};\n\n`;
+          out += `const uint8_t ${icon.name}[]${pm} = {${hex}};\n\n`;
         });
       }
       
@@ -1266,7 +1417,7 @@
           const frameName = `${anim.name}${i + 1}`;
           
           out += `// ${anim.name} Frame ${i + 1}\n`;
-          out += `const uint8_t ${frameName}[] PROGMEM = {${hex}};\n\n`;
+          out += `const uint8_t ${frameName}[]${pm} = {${hex}};\n\n`;
         });
       });
       
@@ -1277,7 +1428,7 @@
       
       activeAnims.forEach(anim => {
         const frameNames = anim.frames.map((_, i) => `${anim.name}${i + 1}`).join(', ');
-        out += `const uint8_t *const ${anim.name}Frames[] PROGMEM = {${frameNames}};\n`;
+        out += `const uint8_t *const ${anim.name}Frames[]${pm} = {${frameNames}};\n`;
       });
       
       // Animation count
@@ -1739,16 +1890,44 @@
         generateOutput();
       };
       
-      // Tools
+      // Tools with toggle support
       document.querySelectorAll('[data-tool]').forEach(btn => {
         btn.onclick = () => {
+          const newTool = btn.dataset.tool;
+          const toggleType = btn.dataset.toggle;
+          
+          // Handle toggle tools when clicking the same tool again
+          if (state.tool === newTool && toggleType) {
+            if (toggleType === 'draw') {
+              state.drawInverted = !state.drawInverted;
+              const sublabel = btn.querySelector('.sublabel');
+              sublabel.textContent = state.drawInverted ? 'inverted' : 'L/R swap';
+              toast(state.drawInverted ? 'Draw mode: Right=draw, Left=erase' : 'Draw mode: Left=draw, Right=erase');
+            } else if (toggleType === 'rect') {
+              state.rectFilled = !state.rectFilled;
+              const icon = btn.querySelector('.icon');
+              const sublabel = btn.querySelector('.sublabel');
+              icon.textContent = state.rectFilled ? '\u2b1b' : '\u2b1c';
+              sublabel.textContent = state.rectFilled ? 'filled' : 'outline';
+              toast(state.rectFilled ? 'Rectangle: filled' : 'Rectangle: outline');
+            } else if (toggleType === 'circle') {
+              state.circleFilled = !state.circleFilled;
+              const icon = btn.querySelector('.icon');
+              const sublabel = btn.querySelector('.sublabel');
+              icon.textContent = state.circleFilled ? '\ud83d\udd35' : '\u2b55';
+              sublabel.textContent = state.circleFilled ? 'filled' : 'outline';
+              toast(state.circleFilled ? 'Circle: filled' : 'Circle: outline');
+            }
+            return;
+          }
+          
           // Commit any existing selection when switching tools
           if (state.tool === 'select' && selection.floatingPixels) {
             commitSelection();
           }
           document.querySelectorAll('[data-tool]').forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
-          state.tool = btn.dataset.tool;
+          state.tool = newTool;
           if (state.tool !== 'select') {
             clearSelection();
           }
@@ -1761,6 +1940,8 @@
       $('#invertBtn').onclick = invertFrame;
       $('#flipHBtn').onclick = flipH;
       $('#flipVBtn').onclick = flipV;
+      $('#rotLBtn').onclick = rotateLeft;
+      $('#rotRBtn').onclick = rotateRight;
       $('#undoBtn').onclick = undo;
       $('#redoBtn').onclick = redo;
       
@@ -1795,6 +1976,30 @@
         draw();
       };
       
+      $('#gridToggle').onchange = () => {
+        state.gridLines = $('#gridToggle').checked;
+        draw();
+      };
+      
+      $('#dragToggle').onchange = () => {
+        state.dragToDraw = $('#dragToggle').checked;
+      };
+      
+      $('#bitOrder').onchange = () => {
+        state.bitOrder = $('#bitOrder').value;
+        generateOutput();
+      };
+      
+      $('#padRows').onchange = () => {
+        state.padRows = $('#padRows').checked;
+        generateOutput();
+      };
+      
+      $('#progmem').onchange = () => {
+        state.progmem = $('#progmem').checked;
+        generateOutput();
+      };
+      
       // Playback
       $('#playBtn').onclick = playAnimation;
       $('#stopBtn').onclick = stopAnimation;
@@ -1820,7 +2025,19 @@
         reader.readAsText(file);
       };
       
+      // Export section buttons
       $('#exportBtn').onclick = () => {
+        generateOutput();
+        toast('Output generated');
+      };
+      
+      $('#copyBtn').onclick = async () => {
+        generateOutput();
+        await navigator.clipboard.writeText(output.value);
+        toast('Copied to clipboard');
+      };
+      
+      $('#exportFileBtn').onclick = () => {
         generateOutput();
         const blob = new Blob([output.value], { type: 'text/plain' });
         const a = document.createElement('a');
@@ -1828,12 +2045,13 @@
         a.download = 'PetImages.h';
         a.click();
         URL.revokeObjectURL(a.href);
+        toast('Exported PetImages.h');
       };
       
-      $('#copyBtn').onclick = async () => {
+      $('#copyAllBtn').onclick = async () => {
         generateOutput();
         await navigator.clipboard.writeText(output.value);
-        toast('Copied to clipboard');
+        toast('All animations copied to clipboard');
       };
       
       // Keyboard shortcuts
@@ -1983,6 +2201,68 @@
         setTimeout(() => t.remove(), 300);
       }, 1500);
     }
+
+    // --- Column Resizing ---
+    (function initResizeHandles() {
+      const wrap = $('.wrap');
+      const leftHandle = $('#leftResizeHandle');
+      const rightHandle = $('#rightResizeHandle');
+      
+      let activeHandle = null;
+      let startX = 0;
+      let startLeftWidth = 280;
+      let startRightWidth = 320;
+      
+      // Load saved widths from localStorage
+      const savedLeft = localStorage.getItem('animEditorLeftWidth');
+      const savedRight = localStorage.getItem('animEditorRightWidth');
+      if (savedLeft) wrap.style.setProperty('--left-width', savedLeft + 'px');
+      if (savedRight) wrap.style.setProperty('--right-width', savedRight + 'px');
+      
+      function onMouseDown(e, handle, isLeft) {
+        activeHandle = handle;
+        handle.classList.add('dragging');
+        startX = e.clientX;
+        const computedStyle = getComputedStyle(wrap);
+        const cols = computedStyle.gridTemplateColumns.split(' ');
+        startLeftWidth = parseFloat(cols[0]);
+        startRightWidth = parseFloat(cols[cols.length - 1]);
+        e.preventDefault();
+        
+        document.addEventListener('mousemove', isLeft ? onMouseMoveLeft : onMouseMoveRight);
+        document.addEventListener('mouseup', onMouseUp);
+      }
+      
+      function onMouseMoveLeft(e) {
+        const delta = e.clientX - startX;
+        const newWidth = Math.max(200, Math.min(500, startLeftWidth + delta));
+        wrap.style.setProperty('--left-width', newWidth + 'px');
+      }
+      
+      function onMouseMoveRight(e) {
+        const delta = startX - e.clientX;
+        const newWidth = Math.max(250, Math.min(500, startRightWidth + delta));
+        wrap.style.setProperty('--right-width', newWidth + 'px');
+      }
+      
+      function onMouseUp() {
+        if (activeHandle) {
+          activeHandle.classList.remove('dragging');
+          // Save widths to localStorage
+          const computedStyle = getComputedStyle(wrap);
+          const cols = computedStyle.gridTemplateColumns.split(' ');
+          localStorage.setItem('animEditorLeftWidth', parseFloat(cols[0]));
+          localStorage.setItem('animEditorRightWidth', parseFloat(cols[cols.length - 1]));
+        }
+        activeHandle = null;
+        document.removeEventListener('mousemove', onMouseMoveLeft);
+        document.removeEventListener('mousemove', onMouseMoveRight);
+        document.removeEventListener('mouseup', onMouseUp);
+      }
+      
+      leftHandle.addEventListener('mousedown', (e) => onMouseDown(e, leftHandle, true));
+      rightHandle.addEventListener('mousedown', (e) => onMouseDown(e, rightHandle, false));
+    })();
     
     // Start
     init();

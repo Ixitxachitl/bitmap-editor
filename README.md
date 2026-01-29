@@ -13,7 +13,11 @@ A single-image editor for creating bitmap emotes and icons.
 - Transform tools: Flip H/V, Rotate, Invert
 - Selection with copy/cut/paste (Ctrl+C/X/V)
 - Paste images from clipboard with threshold control
-- Import/Export C arrays with configurable bit packing (LSB/MSB first)
+- Import from `emotes.cpp` C arrays
+- Export to dual files: `emotes.h` (header with externs) + `emotes.cpp` (implementation)
+- Configurable bit packing (LSB/MSB first), row padding, and PROGMEM
+- Grid and drag-to-draw toggles
+- Resizable panel columns
 - Undo/Redo support
 
 ### [MeshPet Animation Editor](https://ixitxachitl.github.io/bitmap-editor/animation_editor.html)
@@ -27,6 +31,9 @@ A multi-frame animation editor for creating sprite animations.
 - Selection with copy/cut/paste across frames
 - Paste images from clipboard as movable selections
 - Import/Export `PetImages.h` format for Meshtastic firmware
+- Configurable bit packing (LSB/MSB first), row padding, and PROGMEM
+- Grid and drag-to-draw toggles
+- Resizable panel columns
 - Preserves static icons and custom animations on import
 
 ## 🐾 MeshPet Firmware

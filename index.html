@@ -13,14 +13,22 @@
     body{margin:0;background:linear-gradient(180deg,#0f1115,#121624 60%);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,Arial,sans-serif}
     header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:var(--panel);border-bottom:1px solid #232a3a;gap:10px;flex-wrap:wrap}
     h1{font-size:18px;margin:0;font-weight:700;letter-spacing:.2px}
-    .wrap{display:grid;grid-template-columns: 360px 1fr;gap:14px;padding:14px}
-    .col{display:grid;gap:14px;align-content:start}
+    .wrap{display:grid;grid-template-columns:var(--left-width, 280px) 6px 1fr 6px var(--right-width, 320px);gap:0;padding:14px;min-height:calc(100vh - 60px)}
+    .col{display:grid;gap:14px;align-content:start;padding:0 8px}
+    .col:first-child{padding-left:0}
+    .col:last-child{padding-right:0}
+    .center-card{padding:0 8px}
+    /* Resize handles */
+    .resize-handle{width:6px;background:transparent;cursor:col-resize;position:relative;transition:background 0.15s}
+    .resize-handle:hover,.resize-handle.dragging{background:#3a4a6a}
+    .resize-handle::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:2px;height:40px;background:#3a4a6a;border-radius:2px;opacity:0.5}
+    .resize-handle:hover::after,.resize-handle.dragging::after{opacity:1;background:var(--accent)}
     .card{background:var(--panel);border:1px solid #222a3a;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.25);}
-    .card h2{font-size:14px;font-weight:700;margin:0;padding:12px 14px;border-bottom:1px solid #222a3a;color:#cbd5e1;display:flex;align-items:center;gap:8px}
+    .card h2{font-size:13px;font-weight:700;margin:0;padding:10px 14px;border-bottom:1px solid #222a3a;color:#cbd5e1;display:flex;align-items:center;gap:8px}
     .card .body{padding:12px 14px}
-    label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px}
-    input[type="number"], input[type="text"], select, textarea{width:100%;padding:10px;border-radius:10px;border:1px solid #243048;background:var(--panel-2);color:var(--text);font-family:inherit;font-size:13px}
-    textarea{min-height:120px;resize:vertical}
+    label{display:block;font-size:11px;color:var(--muted);margin:8px 0 4px}
+    input[type="number"], input[type="text"], select, textarea{width:100%;padding:8px 10px;border-radius:8px;border:1px solid #243048;background:var(--panel-2);color:var(--text);font-family:inherit;font-size:12px}
+    textarea{min-height:200px;resize:vertical}
     .controls{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
     .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
     .btn{appearance:none;border:1px solid #2b3650;background: #202635;color:var(--text);padding:8px 12px;border-radius:12px;font-weight:600;font-size:12px;cursor:pointer}
@@ -60,16 +68,19 @@
     .btn.active{background:#2d3a5a;border-color:var(--accent)}
     
     /* Tool tiles */
-    .tool-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0}
-    .tool-tile{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 4px;border:1px solid #2b3650;background:#202635;border-radius:10px;cursor:pointer;transition:all 0.15s ease}
+    .tool-grid{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+    .tool-tile{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 6px;border:1px solid #2b3650;background:#202635;border-radius:10px;cursor:pointer;transition:all 0.15s ease;flex:1 1 50px;min-width:50px;max-width:80px}
     .tool-tile:hover{background:#2a3448;border-color:#3a4a6a}
     .tool-tile.active{background:#2d3a5a;border-color:var(--accent);box-shadow:0 0 8px rgba(124,144,255,0.3)}
     .tool-tile .icon{font-size:18px;line-height:1;margin-bottom:4px}
-    .tool-tile .label{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px}
+    .tool-tile .label{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap}
     .tool-tile.active .label{color:var(--accent)}
+    .tool-tile .sublabel{font-size:7px;color:var(--muted);opacity:0.7;white-space:nowrap}
 
     @media (max-width: 980px){
-      .wrap{grid-template-columns:1fr}
+      .wrap{grid-template-columns:1fr !important}
+      .resize-handle{display:none}
+      .col{padding:0 !important}
     }
   </style>
 </head>
@@ -77,171 +88,155 @@
   <header>
     <h1>🧩 Bitmap Emote Editor</h1>
     <div class="row">
-      <button class="btn" id="newBtn">New</button>
-      <button class="btn" id="clearBtn">Clear</button>
-      <button class="btn warn" id="invertBtn">Invert</button>
-      <button class="btn" id="flipHBtn">Flip H</button>
-      <button class="btn" id="flipVBtn">Flip V</button>
-      <button class="btn" id="rotLBtn">Rotate ⟲</button>
-      <button class="btn" id="rotRBtn">Rotate ⟳</button>
-      <button class="btn" id="undoBtn">Undo</button>
-      <button class="btn" id="redoBtn">Redo</button>
+      <a href="animation_editor.html" class="btn ghost">🐾 Animation Editor</a>
     </div>
   </header>
 
   <div class="wrap">
-    <!-- Left column: settings + import separated -->
-    <div class="col">
+    <!-- Left column: Emotes list + Tools -->
+    <div class="col" id="leftCol">
       <section class="card">
-        <h2>Canvas & Export</h2>
+        <h2>🎨 Emotes</h2>
         <div class="body">
-          <div class="controls">
+          <div class="row" style="margin-bottom:10px">
+            <select id="emoteSelect" style="flex:1"></select>
+            <button class="btn small" id="addEmoteBtn">+ Add</button>
+            <button class="btn small danger" id="delEmoteBtn">Delete</button>
+          </div>
+          <label>Emote Name (C identifier)</label>
+          <input type="text" id="name" class="mono" placeholder="e.g. heart"/>
+          <label>Unicode Symbol</label>
+          <input id="symbol" type="text" placeholder="e.g. ❤️ or \u2764"/>
+          <div class="controls" style="margin-top:10px">
             <div>
-              <label>Width (px)</label>
-              <input type="number" id="w" value="24" min="1" max="128"/>
+              <label>Width</label>
+              <input type="number" id="w" value="16" min="1" max="128"/>
             </div>
             <div>
-              <label>Height (px)</label>
-              <input type="number" id="h" value="24" min="1" max="128"/>
-            </div>
-            <div>
-              <label>Zoom</label>
-              <input type="range" id="zoom" min="8" max="32" value="16"/>
+              <label>Height</label>
+              <input type="number" id="h" value="16" min="1" max="128"/>
             </div>
           </div>
-          
-          <label>Tools</label>
-          <div class="tool-grid">
-            <div class="tool-tile active" data-tool="draw"><span class="icon">✏️</span><span class="label">Draw</span></div>
-            <div class="tool-tile" data-tool="erase"><span class="icon">🧹</span><span class="label">Erase</span></div>
-            <div class="tool-tile" data-tool="line"><span class="icon">📏</span><span class="label">Line</span></div>
-            <div class="tool-tile" data-tool="rect"><span class="icon">⬜</span><span class="label">Rect</span></div>
-            <div class="tool-tile" data-tool="circle"><span class="icon">⭕</span><span class="label">Circle</span></div>
-            <div class="tool-tile" data-tool="disc"><span class="icon">🔵</span><span class="label">Disc</span></div>
-            <div class="tool-tile" data-tool="fill"><span class="icon">🪣</span><span class="label">Fill</span></div>
-            <div class="tool-tile" data-tool="select"><span class="icon">⬚</span><span class="label">Select</span></div>
-          </div>
-
-          <div style="height:8px"></div>
-          <div class="row">
-            <span class="pill"><input id="gridToggle" type="checkbox" checked> <span>Show grid</span></span>
-            <span class="pill"><input id="dragToggle" type="checkbox" checked> <span>Drag to draw</span></span>
-          </div>
-
-          <div style="height:12px"></div>
-          <div class="row">
-            <input id="symbol" type="text" placeholder="Unicode (e.g. \u2764 or 😀)"/>
-          </div>
-
-          <div style="height:12px"></div>
-          <div class="row">
-            <input id="name" class="mono" type="text" placeholder="C array name (e.g. heart)"/>
-          </div>
-
-          <div style="height:12px"></div>
-          <div class="row">
-            <button id="exportBtn" class="btn primary">Export C Array</button>
-            <button id="copyBtn" class="btn">Copy</button>
-            <button id="downloadBtn" class="btn">Download .h</button>
-          </div>
-
-          <div style="height:12px"></div>
-          <details>
-            <summary style="cursor:pointer;color:#cbd5e1">Packing Options</summary>
-            <div class="body" style="padding:8px 0 0">
-              <label>Bits per byte packing</label>
-              <!-- Default to LSB first -->
-              <select id="bitOrder">
-                <option value="lsb0" selected>Row-major, LSB first (bit0=leftmost)</option>
-                <option value="msb0">Row-major, MSB first (bit7=leftmost)</option>
-              </select>
-              <div style="height:8px"></div>
-              <div class="row">
-                <span class="pill"><input id="padRows" type="checkbox" checked> <span>Pad each row to full bytes</span></span>
-                <span class="pill"><input id="progmem" type="checkbox" checked> <span>Add <code class="mono">PROGMEM</code></span></span>
-              </div>
-            </div>
-          </details>
-
-          <div style="height:12px"></div>
-          <label>Output</label>
-          <textarea id="out" class="mono" spellcheck="false" placeholder="// exported C array will appear here"></textarea>
-
-          <div class="legend">
-            Tip: Default packing is <strong>LSB first</strong>. Switch to MSB if your firmware expects it.
-          </div>
-        </div>
-        <div class="footer">
-          Made for quick creation of 1‑bit emoji/emotes.
         </div>
       </section>
 
-      <!-- NEW: Import is its own card, separated from the editor UI -->
       <section class="card">
-        <h2>Import from C Array</h2>
-        <div class="body import-grid">
-          <div>
-            <label>Paste array (comma/space/newline separated hex like <code>0x00, 0x1C, ...</code>)</label>
-            <textarea id="in" class="mono" placeholder="0x00, 0x1C, 0x00, 0x00, ..."></textarea>
+        <h2>🔧 Tools</h2>
+        <div class="body">
+          <div class="tool-grid">
+            <div class="tool-tile active" data-tool="draw" data-toggle="draw"><span class="icon">✏️</span><span class="label">Draw</span><span class="sublabel">L/R swap</span></div>
+            <div class="tool-tile" data-tool="line"><span class="icon">📏</span><span class="label">Line</span></div>
+            <div class="tool-tile" data-tool="rect" data-toggle="rect"><span class="icon">⬜</span><span class="label">Rect</span><span class="sublabel">outline</span></div>
+            <div class="tool-tile" data-tool="circle" data-toggle="circle"><span class="icon">⭕</span><span class="label">Circle</span><span class="sublabel">outline</span></div>
+            <div class="tool-tile" data-tool="fill"><span class="icon">🪣</span><span class="label">Fill</span></div>
+            <div class="tool-tile" data-tool="select"><span class="icon">⬚</span><span class="label">Select</span></div>
           </div>
-          <div class="controls">
-            <div>
-              <label>Array Width</label>
-              <input type="number" id="iw" min="1" max="256" placeholder="e.g. 24"/>
-            </div>
-            <div>
-              <label>Array Height</label>
-              <input type="number" id="ih" min="1" max="256" placeholder="e.g. 24"/>
-            </div>
-            <div>
-              <label>Bit Order</label>
-              <select id="ibitOrder">
-                <!-- Default to LSB first here as well -->
-                <option value="lsb0" selected>Row-major, LSB first</option>
-                <option value="msb0">Row-major, MSB first</option>
-              </select>
-            </div>
-            <div>
-              <label>Row Padding</label>
-              <select id="ipadRows">
-                <option value="yes">Each row padded to full byte</option>
-                <option value="no">Continuous stream (no row pad)</option>
-              </select>
-            </div>
-          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>⚙️ Settings</h2>
+        <div class="body">
           <div class="row">
-            <button id="importBtn" class="btn">Import</button>
-            <button id="pasteImageBtn" class="btn">📋 Paste Image</button>
+            <span class="pill"><input id="gridToggle" type="checkbox" checked> <span>Grid</span></span>
+            <span class="pill"><input id="dragToggle" type="checkbox" checked> <span>Drag draw</span></span>
           </div>
-          <div class="legend">Import is now separate from the live editor to keep things tidy. Defaults to <strong>LSB first</strong>.</div>
+          <label>Zoom</label>
+          <input type="range" id="zoom" min="8" max="32" value="16"/>
+          <div style="height:8px"></div>
+          <label>Bit Packing</label>
+          <select id="bitOrder">
+            <option value="lsb0" selected>LSB first (bit0=leftmost)</option>
+            <option value="msb0">MSB first (bit7=leftmost)</option>
+          </select>
+          <div style="height:8px"></div>
+          <div class="row">
+            <span class="pill"><input id="padRows" type="checkbox" checked> <span>Pad rows</span></span>
+            <span class="pill"><input id="progmem" type="checkbox" checked> <span>PROGMEM</span></span>
+          </div>
         </div>
       </section>
     </div>
 
-    <!-- Right column: editor + preview only -->
+    <!-- Left resize handle -->
+    <div class="resize-handle" id="leftResizeHandle"></div>
+
+    <!-- Center: Editor -->
     <section class="card">
-      <h2>Editor</h2>
+      <h2>✏️ Editor</h2>
       <div class="body">
-        <div class="gridWrap">
-          <div>
-            <div class="canvas-wrapper" id="canvasWrapper">
-              <canvas id="grid" width="384" height="384"></canvas>
-              <div class="selection-overlay" id="selectionOverlay" style="display:none"></div>
-            </div>
-            <div style="height:10px"></div>
-            <div class="legend">Left‑click: draw • Right‑click: erase • Ctrl+C/X/V: copy/cut/paste • Ctrl+Z/Y: undo/redo</div>
-          </div>
-          <div>
-            <details open>
-              <summary style="cursor:pointer;color:#cbd5e1">Preview</summary>
-              <div class="body" style="padding:8px 0 0">
-                <canvas id="preview" width="120" height="120" style="border:1px dashed #2c3346;border-radius:10px"></canvas>
-              </div>
-            </details>
-          </div>
+        <div class="row" style="margin-bottom:10px">
+          <button class="btn small" id="clearBtn">Clear</button>
+          <button class="btn small" id="invertBtn">Invert</button>
+          <button class="btn small" id="flipHBtn">Flip H</button>
+          <button class="btn small" id="flipVBtn">Flip V</button>
+          <button class="btn small" id="rotLBtn">↺</button>
+          <button class="btn small" id="rotRBtn">↻</button>
+          <button class="btn small" id="undoBtn">Undo</button>
+          <button class="btn small" id="redoBtn">Redo</button>
         </div>
+        <div class="canvas-wrapper" id="canvasWrapper">
+          <canvas id="grid" width="384" height="384"></canvas>
+          <div class="selection-overlay" id="selectionOverlay" style="display:none"></div>
+        </div>
+        <div class="legend" style="margin-top:10px">Left‑click: draw • Right‑click: erase • Ctrl+C/X/V: copy/cut/paste</div>
       </div>
     </section>
+
+    <!-- Right resize handle -->
+    <div class="resize-handle" id="rightResizeHandle"></div>
+
+    <!-- Right column: Preview + Import/Export -->
+    <div class="col" id="rightCol">
+      <section class="card">
+        <h2>👁️ Preview</h2>
+        <div class="body" style="text-align:center">
+          <canvas id="preview" width="96" height="96" style="border:1px dashed #2c3346;border-radius:10px"></canvas>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>📥 Import</h2>
+        <div class="body">
+          <div class="row" style="margin-bottom:10px">
+            <button class="btn small" id="importFileBtn" style="flex:1">📂 Import emotes.cpp</button>
+          </div>
+          <label>Or paste hex bytes</label>
+          <textarea id="in" class="mono" style="min-height:50px" placeholder="0x00, 0x1C, ..."></textarea>
+          <div class="controls" style="margin-top:8px">
+            <div>
+              <label>Width</label>
+              <input type="number" id="iw" min="1" max="256" placeholder="16"/>
+            </div>
+            <div>
+              <label>Height</label>
+              <input type="number" id="ih" min="1" max="256" placeholder="16"/>
+            </div>
+          </div>
+          <div class="row" style="margin-top:8px">
+            <button id="importBtn" class="btn small">Import Hex</button>
+            <button id="pasteImageBtn" class="btn small">📋 Paste Image</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" style="flex:1">
+        <h2>📤 Export</h2>
+        <div class="body">
+          <textarea id="out" class="mono" style="min-height:150px" spellcheck="false" placeholder="// Generated code will appear here..."></textarea>
+          <div class="row" style="margin-top:8px">
+            <button class="btn small" id="exportBtn">Generate</button>
+            <button class="btn small" id="copyBtn">Copy</button>
+          </div>
+          <div class="row" style="margin-top:8px">
+            <button class="btn small primary" id="exportFileBtn" style="flex:1">📂 Export .h + .cpp</button>
+          </div>
+          <div class="row" style="margin-top:8px">
+            <button class="btn small" id="copyAllBtn" style="flex:1">📋 Copy All Emotes</button>
+          </div>
+        </div>
+      </section>
+    </div>
   </div>
 
   <!-- Clipboard Import Modal -->
@@ -282,13 +277,22 @@
   <script>
     // --- Model ---
     const state = {
-      w: 24, h: 24,
+      w: 16, h: 16,
       pixels: [],
       zoom: 16,
       brush: 'draw',
       gridLines: true,
       dragToDraw: true,
+      drawInverted: false,  // When true, left click erases, right click draws
+      rectFilled: false,    // Toggle for filled rectangle
+      circleFilled: false,  // Toggle for filled circle
     };
+
+    // Emotes list - each emote stores its own pixel data
+    let emotes = [
+      { name: 'heart', symbol: '❤️', w: 16, h: 16, pixels: new Array(16*16).fill(0) }
+    ];
+    let currentEmote = 0;
 
     // Selection state
     let selection = {
@@ -324,6 +328,7 @@
     const out = $('#out');
     const nameIn = $('#name');
     const symbolIn = $('#symbol');
+    const emoteSelect = $('#emoteSelect');
 
     const bitOrder = $('#bitOrder');
     const padRows = $('#padRows');
@@ -332,9 +337,72 @@
     const importArea = $('#in');
     const iw = $('#iw');
     const ih = $('#ih');
-    const ibitOrder = $('#ibitOrder');
-    const ipadRows = $('#ipadRows');
     const selectionOverlay = $('#selectionOverlay');
+
+    // --- Emote Management ---
+    function currentEmoteObj() {
+      return emotes[currentEmote];
+    }
+
+    function saveCurrentEmote() {
+      // Save current state back to the emote object
+      const e = emotes[currentEmote];
+      e.pixels = state.pixels.slice();
+      e.w = state.w;
+      e.h = state.h;
+      e.name = nameIn.value || 'emote';
+      e.symbol = symbolIn.value || '';
+    }
+
+    function loadEmote(index) {
+      currentEmote = Math.max(0, Math.min(index, emotes.length - 1));
+      const e = emotes[currentEmote];
+      state.w = e.w;
+      state.h = e.h;
+      state.pixels = e.pixels.slice();
+      wIn.value = state.w;
+      hIn.value = state.h;
+      nameIn.value = e.name;
+      symbolIn.value = e.symbol;
+      resizeCanvas();
+      draw();
+    }
+
+    function populateEmoteSelect() {
+      emoteSelect.innerHTML = emotes.map((e, i) => 
+        `<option value="${i}">${e.name} (${e.w}x${e.h})</option>`
+      ).join('');
+      emoteSelect.value = currentEmote;
+    }
+
+    function addEmote() {
+      saveCurrentEmote();
+      const name = prompt('Emote name (C identifier):', 'newEmote');
+      if (!name) return;
+      emotes.push({
+        name: name.replace(/\W/g, ''),
+        symbol: '',
+        w: 16,
+        h: 16,
+        pixels: new Array(16 * 16).fill(0)
+      });
+      currentEmote = emotes.length - 1;
+      populateEmoteSelect();
+      loadEmote(currentEmote);
+    }
+
+    function deleteEmote() {
+      if (emotes.length <= 1) {
+        toast('Cannot delete last emote');
+        return;
+      }
+      if (!confirm('Delete emote "' + currentEmoteObj().name + '"?')) return;
+      pushHistory();
+      emotes.splice(currentEmote, 1);
+      currentEmote = Math.min(currentEmote, emotes.length - 1);
+      populateEmoteSelect();
+      loadEmote(currentEmote);
+    }
 
     // History stacks
     const undoStack = [];
@@ -372,7 +440,6 @@
     }
 
     // Buttons
-    $('#newBtn').onclick = () => { pushHistory(); clearSelection(); setSize(24,24); clearPixels(); draw(); };
     $('#clearBtn').onclick = () => { pushHistory(); clearPixels(); draw(); };
     $('#invertBtn').onclick = () => { pushHistory(); invertPixels(); draw(); };
     $('#flipHBtn').onclick = () => { pushHistory(); flipHorizontal(); draw(); };
@@ -382,6 +449,34 @@
     $('#undoBtn').onclick = () => undo();
     $('#redoBtn').onclick = () => redo();
 
+    // Emote management buttons
+    emoteSelect.onchange = () => {
+      saveCurrentEmote();
+      loadEmote(+emoteSelect.value);
+    };
+    $('#addEmoteBtn').onclick = addEmote;
+    $('#delEmoteBtn').onclick = deleteEmote;
+
+    // Name/symbol inputs save to current emote
+    nameIn.oninput = () => {
+      emotes[currentEmote].name = nameIn.value;
+      populateEmoteSelect();
+    };
+    symbolIn.oninput = () => {
+      emotes[currentEmote].symbol = symbolIn.value;
+    };
+
+    // Header buttons - file import/export
+    $('#importFileBtn').onclick = () => importEmotesFile();
+    $('#exportFileBtn').onclick = () => exportEmotesFile();
+    $('#copyAllBtn').onclick = async () => {
+      saveCurrentEmote();
+      const code = generateAllEmotesCode();
+      await navigator.clipboard.writeText(code);
+      toast('All emotes copied to clipboard');
+    };
+
+    // Single emote output buttons
     $('#exportBtn').onclick = () => {
       out.value = makeCArray();
       out.scrollTop = 0;
@@ -391,27 +486,45 @@
       await navigator.clipboard.writeText(out.value);
       toast('Copied to clipboard');
     };
-    $('#downloadBtn').onclick = () => {
-      const txt = out.value || makeCArray();
-      const nm = (nameIn.value||'emote') + '.h';
-      const blob = new Blob([txt], {type:'text/plain'});
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = nm;
-      a.click();
-      URL.revokeObjectURL(a.href);
-    };
-    $('#importBtn').onclick = () => { pushHistory(); importFromHex(); };
 
+    // Legacy single-emote buttons (keep for Import Single section)
+    $('#importBtn').onclick = () => { pushHistory(); importFromHex(); };
     // Inputs
-    wIn.oninput = () => { pushHistory(); setSize(+wIn.value, state.h); };
-    hIn.oninput = () => { pushHistory(); setSize(state.w, +hIn.value); };
+    wIn.oninput = () => { pushHistory(); setSize(+wIn.value, state.h); saveCurrentEmote(); };
+    hIn.oninput = () => { pushHistory(); setSize(state.w, +hIn.value); saveCurrentEmote(); };
     zoomIn.oninput = () => { state.zoom = +zoomIn.value; resizeCanvas(); draw(); };
     
-    // Tool tile click handlers
+    // Tool tile click handlers with toggle support
     $$('[data-tool]').forEach(tile => {
       tile.onclick = () => {
         const newTool = tile.dataset.tool;
+        const toggleType = tile.dataset.toggle;
+        
+        // Handle toggle tools when clicking the same tool again
+        if (state.brush === newTool && toggleType) {
+          if (toggleType === 'draw') {
+            state.drawInverted = !state.drawInverted;
+            const sublabel = tile.querySelector('.sublabel');
+            sublabel.textContent = state.drawInverted ? 'inverted' : 'L/R swap';
+            toast(state.drawInverted ? 'Draw mode: Right=draw, Left=erase' : 'Draw mode: Left=draw, Right=erase');
+          } else if (toggleType === 'rect') {
+            state.rectFilled = !state.rectFilled;
+            const icon = tile.querySelector('.icon');
+            const sublabel = tile.querySelector('.sublabel');
+            icon.textContent = state.rectFilled ? '⬛' : '⬜';
+            sublabel.textContent = state.rectFilled ? 'filled' : 'outline';
+            toast(state.rectFilled ? 'Rectangle: filled' : 'Rectangle: outline');
+          } else if (toggleType === 'circle') {
+            state.circleFilled = !state.circleFilled;
+            const icon = tile.querySelector('.icon');
+            const sublabel = tile.querySelector('.sublabel');
+            icon.textContent = state.circleFilled ? '🔵' : '⭕';
+            sublabel.textContent = state.circleFilled ? 'filled' : 'outline';
+            toast(state.circleFilled ? 'Circle: filled' : 'Circle: outline');
+          }
+          return;
+        }
+        
         // Commit selection when switching away from select tool
         if (state.brush === 'select' && newTool !== 'select') {
           if (selection.floatingPixels) { commitSelection(); }
@@ -498,7 +611,8 @@
     });
 
     // init
-    setSize(24,24); clearPixels(); draw();
+    populateEmoteSelect();
+    loadEmote(0);
 
     // --- Drawing helpers ---
     function setSize(w,h,noDraw=false){
@@ -942,7 +1056,14 @@
 
     grid.addEventListener('mousedown', (e)=>{
       const {x,y} = eventToCell(e);
-      activeMode = (e.button===2) ? 'erase' : state.brush;
+      const rightClick = e.button === 2;
+      
+      // Determine draw/erase based on click and inversion state
+      let isErasing = rightClick;
+      if (state.brush === 'draw' && state.drawInverted) {
+        isErasing = !rightClick; // Swap: left=erase, right=draw
+      }
+      activeMode = isErasing ? 'erase' : state.brush;
 
       // Selection tool
       if (state.brush === 'select') {
@@ -970,7 +1091,7 @@
         }
       }
 
-      if(['line','rect','circle','disc'].includes(activeMode)){
+      if(['line','rect','circle'].includes(activeMode)){
         startPt = {x,y,mode: activeMode};
         shapeBase = state.pixels.slice();
         pushHistory();
@@ -981,8 +1102,7 @@
       // freehand or erase/fill single click
       pushHistory();
       drawing = state.dragToDraw;
-      const eraseMode = state.brush === 'erase' || activeMode === 'erase';
-      applyBrush(x,y, eraseMode ? 'erase' : 'draw');
+      applyBrush(x,y, isErasing ? 'erase' : 'draw');
       draw();
     });
 
@@ -1022,22 +1142,23 @@
       
       if(!drawing) return;
 
-      if(startPt && ['line','rect','circle','disc'].includes(startPt.mode)){
+      if(startPt && ['line','rect','circle'].includes(startPt.mode)){
         // rubber-band by restoring snapshot then committing the shape
         state.pixels = shapeBase.slice();
         const val = (activeMode === 'erase') ? 0 : 1;
-        if(startPt.mode==='rect' || startPt.mode==='line'){
-          strokeShape(startPt,x,y,startPt.mode==='rect', /*commit=*/true, /*val=*/val);
+        if(startPt.mode==='line'){
+          strokeShape(startPt,x,y,false, /*commit=*/true, /*val=*/val);
+        }else if(startPt.mode==='rect'){
+          strokeShape(startPt,x,y,true, /*commit=*/true, /*val=*/val, state.rectFilled);
         }else{
-          strokeCircle(startPt,x,y, startPt.mode==='disc', /*commit=*/true, /*val=*/val);
+          strokeCircle(startPt,x,y, state.circleFilled, /*commit=*/true, /*val=*/val);
         }
         draw();
         return;
       }
 
       // freehand
-      const eraseMode = state.brush === 'erase' || activeMode === 'erase';
-      applyBrush(x,y, eraseMode ? 'erase' : 'draw');
+      applyBrush(x,y, activeMode === 'erase' ? 'erase' : 'draw');
       draw();
     });
 
@@ -1067,11 +1188,20 @@
       setPx(x,y, mode==='erase'?0:1);
     }
 
-    // Draw rectangle/line (with commit + val support)
-    function strokeShape(a,bx,by, isRect, commit=false, val=1){
+    // Draw rectangle/line (with commit + val + filled support)
+    function strokeShape(a,bx,by, isRect, commit=false, val=1, filled=false){
       if(isRect){
         const x0=Math.min(a.x,bx), x1=Math.max(a.x,bx), y0=Math.min(a.y,by), y1=Math.max(a.y,by);
-        for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++) if(commit) setPx(x,y,val); else { g.fillStyle='white'; g.fillRect(x*state.zoom,y*state.zoom,state.zoom,state.zoom); }
+        for(let y=y0;y<=y1;y++) {
+          for(let x=x0;x<=x1;x++) {
+            // For outline rect, only draw border pixels
+            const isBorder = (y === y0 || y === y1 || x === x0 || x === x1);
+            if (filled || isBorder) {
+              if(commit) setPx(x,y,val); 
+              else { g.fillStyle='white'; g.fillRect(x*state.zoom,y*state.zoom,state.zoom,state.zoom); }
+            }
+          }
+        }
         return;
       }
       // line (Bresenham)
@@ -1141,7 +1271,8 @@
       const bytes = parseHexInput(importArea.value);
       const W = +iw.value||state.w; const H = +ih.value||state.h;
       setSize(W,H); clearPixels();
-      const order = ibitOrder.value; const pad = ipadRows.value==='yes';
+      // Use main export options for bit order and padding
+      const order = bitOrder.value; const pad = padRows.checked;
       let idx=0;
       for(let y=0;y<H;y++){
         for(let x=0;x<W;x++){
@@ -1152,6 +1283,7 @@
         }
         if(pad){ const rem = W%8; if(rem!==0) idx += (8-rem)/8; }
       }
+      saveCurrentEmote();
       draw(); toast('Imported '+bytes.length+' byte(s)');
     }
 
@@ -1334,12 +1466,342 @@
       return hdr + emoteLine;
     }
 
+    // Pack bytes for a specific emote's pixels
+    function packBytesForEmote(emote, order='lsb0', pad=true) {
+      const W = emote.w, H = emote.h;
+      const bytes = [];
+      let cur = 0, count = 0;
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const bit = emote.pixels[y * W + x] ? 1 : 0;
+          if (order === 'msb0') { cur = (cur << 1) | bit; }
+          else { cur |= (bit << count); }
+          count++;
+          if (count === 8) { bytes.push(order === 'msb0' ? cur : cur & 0xFF); cur = 0; count = 0; }
+        }
+        if (pad && count !== 0) {
+          if (order === 'msb0') { cur <<= (8 - count); }
+          bytes.push(cur & 0xFF); cur = 0; count = 0;
+        }
+      }
+      if (!pad && count !== 0) { bytes.push(cur & 0xFF); }
+      return bytes;
+    }
+
+    // Generate header file (emotes.h)
+    function generateEmotesHeader() {
+      saveCurrentEmote();
+      const usePROGMEM = progmem.checked;
+      
+      let code = '// emotes.h - Generated by Bitmap Emote Editor\n';
+      code += '#ifndef EMOTES_H\n';
+      code += '#define EMOTES_H\n\n';
+      code += '#include <Arduino.h>\n\n';
+      
+      // Forward declarations for each emote
+      emotes.forEach(emote => {
+        const nm = emote.name.replace(/\W+/g, '_');
+        code += `extern const unsigned char ${nm}[]${usePROGMEM ? ' PROGMEM' : ''};\n`;
+        code += `extern const int ${nm}_width;\n`;
+        code += `extern const int ${nm}_height;\n\n`;
+      });
+      
+      // Emote struct definition
+      code += '// Emote structure\n';
+      code += 'struct Emote {\n';
+      code += '    const char* symbol;\n';
+      code += '    const unsigned char* bitmap;\n';
+      code += '    int width;\n';
+      code += '    int height;\n';
+      code += '};\n\n';
+      
+      // Extern declarations for emote table
+      code += `extern const Emote emoteTable[];\n`;
+      code += `extern const int NUM_EMOTES;\n\n`;
+      
+      code += '#endif // EMOTES_H\n';
+      
+      return code;
+    }
+
+    // Generate implementation file (emotes.cpp)
+    function generateEmotesCpp() {
+      saveCurrentEmote();
+      const order = bitOrder.value;
+      const pad = padRows.checked;
+      const usePROGMEM = progmem.checked;
+      
+      let code = '// emotes.cpp - Generated by Bitmap Emote Editor\n';
+      code += '#include "emotes.h"\n\n';
+      
+      // Generate each emote's bitmap data
+      emotes.forEach(emote => {
+        const nm = emote.name.replace(/\W+/g, '_');
+        const bytes = packBytesForEmote(emote, order, pad);
+        const hex = bytes.map(b => '0x' + b.toString(16).toUpperCase().padStart(2, '0')).join(', ');
+        
+        code += `const unsigned char ${nm}[]${usePROGMEM ? ' PROGMEM' : ''} = {\n    ${hex}\n};\n\n`;
+        code += `const int ${nm}_width = ${emote.w};\n`;
+        code += `const int ${nm}_height = ${emote.h};\n\n`;
+      });
+      
+      // Generate emotes array
+      code += '// Emote table\n';
+      code += 'const Emote emoteTable[] = {\n';
+      emotes.forEach(emote => {
+        const nm = emote.name.replace(/\W+/g, '_');
+        const sym = emote.symbol || '';
+        code += `    { "${sym}", ${nm}, ${nm}_width, ${nm}_height },\n`;
+      });
+      code += '};\n\n';
+      code += `const int NUM_EMOTES = ${emotes.length};\n`;
+      
+      return code;
+    }
+
+    // Generate code for all emotes (combined for preview)
+    function generateAllEmotesCode() {
+      return generateEmotesHeader() + '\n// ========================================\n// emotes.cpp\n// ========================================\n\n' + generateEmotesCpp();
+    }
+
+    // Export emotes to files (downloads both .h and .cpp)
+    function exportEmotesFile() {
+      saveCurrentEmote();
+      
+      // Export header file
+      const headerCode = generateEmotesHeader();
+      const headerBlob = new Blob([headerCode], { type: 'text/plain' });
+      const headerLink = document.createElement('a');
+      headerLink.href = URL.createObjectURL(headerBlob);
+      headerLink.download = 'emotes.h';
+      headerLink.click();
+      URL.revokeObjectURL(headerLink.href);
+      
+      // Small delay then export cpp file
+      setTimeout(() => {
+        const cppCode = generateEmotesCpp();
+        const cppBlob = new Blob([cppCode], { type: 'text/plain' });
+        const cppLink = document.createElement('a');
+        cppLink.href = URL.createObjectURL(cppBlob);
+        cppLink.download = 'emotes.cpp';
+        cppLink.click();
+        URL.revokeObjectURL(cppLink.href);
+        toast('Exported emotes.h + emotes.cpp');
+      }, 100);
+    }
+
+    // Import emotes from file
+    function importEmotesFile() {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.cpp,.h,.c,.txt';
+      input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const text = await file.text();
+        parseEmotesFile(text);
+      };
+      input.click();
+    }
+
+    // Parse emotes.cpp format
+    function parseEmotesFile(text) {
+      const newEmotes = [];
+      
+      // Match patterns like: const unsigned char name[] PROGMEM = { 0x00, 0x1C, ... };
+      const arrayRegex = /const\s+unsigned\s+char\s+(\w+)\s*\[\s*\]\s*(?:PROGMEM\s*)?=\s*\{([^}]+)\}/g;
+      const widthRegex = /const\s+int\s+(\w+)_width\s*=\s*(\d+)/g;
+      const heightRegex = /const\s+int\s+(\w+)_height\s*=\s*(\d+)/g;
+      // Updated regex to capture more flexible emote table entries
+      const emoteTableRegex = /\{\s*"([^"]*)",\s*(\w+),\s*(\w+),\s*(\w+)\s*\}/g;
+      
+      // Parse arrays
+      const arrays = {};
+      let match;
+      while ((match = arrayRegex.exec(text)) !== null) {
+        const name = match[1];
+        const hexStr = match[2];
+        const bytes = hexStr.match(/0x[0-9A-Fa-f]{2}/g) || [];
+        arrays[name] = bytes.map(h => parseInt(h, 16));
+      }
+      
+      // Parse width/height constants
+      const widths = {};
+      const heights = {};
+      while ((match = widthRegex.exec(text)) !== null) {
+        widths[match[1]] = parseInt(match[2]);
+      }
+      while ((match = heightRegex.exec(text)) !== null) {
+        heights[match[1]] = parseInt(match[2]);
+      }
+      
+      // Parse emote table for symbols and dimensions
+      // Format: { "symbol", arrayName, widthVar, heightVar }
+      const emoteTableEntries = {};
+      while ((match = emoteTableRegex.exec(text)) !== null) {
+        const symbol = match[1];
+        const arrayName = match[2];
+        const widthVarName = match[3].replace(/_width$/, '');
+        const heightVarName = match[4].replace(/_height$/, '');
+        emoteTableEntries[arrayName] = {
+          symbol,
+          widthKey: widthVarName,
+          heightKey: heightVarName
+        };
+      }
+      
+      // Build emotes from parsed data
+      for (const name of Object.keys(arrays)) {
+        const bytes = arrays[name];
+        let w = 16, h = 16;
+        let symbol = '';
+        
+        // First try direct name match for width/height
+        if (widths[name]) w = widths[name];
+        if (heights[name]) h = heights[name];
+        
+        // Then check emote table for alternative width/height keys
+        const tableEntry = emoteTableEntries[name];
+        if (tableEntry) {
+          symbol = tableEntry.symbol;
+          if (widths[tableEntry.widthKey]) w = widths[tableEntry.widthKey];
+          if (heights[tableEntry.heightKey]) h = heights[tableEntry.heightKey];
+        }
+        
+        const pixels = unpackBytes(bytes, w, h, 'lsb0', true);
+        
+        newEmotes.push({
+          name: name,
+          symbol: symbol,
+          w: w,
+          h: h,
+          pixels: pixels
+        });
+      }
+      
+      if (newEmotes.length === 0) {
+        toast('No emotes found in file');
+        return;
+      }
+      
+      emotes = newEmotes;
+      currentEmote = 0;
+      populateEmoteSelect();
+      loadEmote(0);
+      toast(`Imported ${newEmotes.length} emote(s)`);
+    }
+
+    // Unpack bytes to pixels (for import)
+    function unpackBytes(bytes, w, h, order='lsb0', padded=true) {
+      const pixels = new Array(w * h).fill(0);
+      const bytesPerRow = padded ? Math.ceil(w / 8) : null;
+      
+      let byteIndex = 0;
+      let bitIndex = 0;
+      
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          if (byteIndex >= bytes.length) break;
+          
+          let bit;
+          if (order === 'msb0') {
+            bit = (bytes[byteIndex] >> (7 - bitIndex)) & 1;
+          } else {
+            bit = (bytes[byteIndex] >> bitIndex) & 1;
+          }
+          
+          pixels[y * w + x] = bit;
+          bitIndex++;
+          
+          if (bitIndex >= 8) {
+            bitIndex = 0;
+            byteIndex++;
+          }
+        }
+        
+        // If padded, skip to next byte boundary at end of row
+        if (padded && bitIndex !== 0) {
+          bitIndex = 0;
+          byteIndex++;
+        }
+      }
+      
+      return pixels;
+    }
+
+    // Update output when emote changes
+    function updateOutput() {
+      out.value = makeCArray();
+    }
+
     // --- tiny toast ---
     function toast(msg){
       const t=document.createElement('div');
       t.textContent=msg; t.style.position='fixed'; t.style.bottom='16px'; t.style.right='16px'; t.style.background='#1f2534'; t.style.border='1px solid #2e3952'; t.style.padding='10px 12px'; t.style.borderRadius='10px'; t.style.color='#d3dbeb'; t.style.boxShadow='0 10px 30px rgba(0,0,0,.25)'; t.style.zIndex=9999;
       document.body.appendChild(t); setTimeout(()=>{ t.style.transition='all .3s ease'; t.style.opacity='0'; t.style.transform='translateY(8px)'; setTimeout(()=>t.remove(),300); }, 1200);
     }
+
+    // --- Column Resizing ---
+    (function initResizeHandles() {
+      const wrap = $('.wrap');
+      const leftHandle = $('#leftResizeHandle');
+      const rightHandle = $('#rightResizeHandle');
+      
+      let activeHandle = null;
+      let startX = 0;
+      let startLeftWidth = 280;
+      let startRightWidth = 320;
+      
+      // Load saved widths from localStorage
+      const savedLeft = localStorage.getItem('emoteEditorLeftWidth');
+      const savedRight = localStorage.getItem('emoteEditorRightWidth');
+      if (savedLeft) wrap.style.setProperty('--left-width', savedLeft + 'px');
+      if (savedRight) wrap.style.setProperty('--right-width', savedRight + 'px');
+      
+      function onMouseDown(e, handle, isLeft) {
+        activeHandle = handle;
+        handle.classList.add('dragging');
+        startX = e.clientX;
+        const computedStyle = getComputedStyle(wrap);
+        const cols = computedStyle.gridTemplateColumns.split(' ');
+        startLeftWidth = parseFloat(cols[0]);
+        startRightWidth = parseFloat(cols[cols.length - 1]);
+        e.preventDefault();
+        
+        document.addEventListener('mousemove', isLeft ? onMouseMoveLeft : onMouseMoveRight);
+        document.addEventListener('mouseup', onMouseUp);
+      }
+      
+      function onMouseMoveLeft(e) {
+        const delta = e.clientX - startX;
+        const newWidth = Math.max(200, Math.min(500, startLeftWidth + delta));
+        wrap.style.setProperty('--left-width', newWidth + 'px');
+      }
+      
+      function onMouseMoveRight(e) {
+        const delta = startX - e.clientX;
+        const newWidth = Math.max(250, Math.min(500, startRightWidth + delta));
+        wrap.style.setProperty('--right-width', newWidth + 'px');
+      }
+      
+      function onMouseUp() {
+        if (activeHandle) {
+          activeHandle.classList.remove('dragging');
+          // Save widths to localStorage
+          const computedStyle = getComputedStyle(wrap);
+          const cols = computedStyle.gridTemplateColumns.split(' ');
+          localStorage.setItem('emoteEditorLeftWidth', parseFloat(cols[0]));
+          localStorage.setItem('emoteEditorRightWidth', parseFloat(cols[cols.length - 1]));
+        }
+        activeHandle = null;
+        document.removeEventListener('mousemove', onMouseMoveLeft);
+        document.removeEventListener('mousemove', onMouseMoveRight);
+        document.removeEventListener('mouseup', onMouseUp);
+      }
+      
+      leftHandle.addEventListener('mousedown', (e) => onMouseDown(e, leftHandle, true));
+      rightHandle.addEventListener('mousedown', (e) => onMouseDown(e, rightHandle, false));
+    })();
   </script>
 </body>
 </html>
