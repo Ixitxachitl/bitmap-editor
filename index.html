@@ -1459,12 +1459,19 @@
     function makeCArray(){
       const nm = (nameIn.value||'emote').replace(/\W+/g,'_');
       const sym = symbolIn.value||'';
+      // Escape symbol for C string (use \u for 4-digit, \U for larger codepoints)
+      const symEscaped = [...sym].map(c => {
+        const cp = c.codePointAt(0);
+        if (cp <= 127) return c;
+        if (cp <= 0xFFFF) return '\\u' + cp.toString(16).toUpperCase().padStart(4, '0');
+        return '\\U' + cp.toString(16).toUpperCase().padStart(8, '0');
+      }).join('');
       const order = bitOrder.value; const pad = padRows.checked;
       const bytes = packBytes(order,pad);
       const hex = bytes.map(b=> '0x'+b.toString(16).toUpperCase().padStart(2,'0')).join(', ');
       const W=state.w,H=state.h;
       const hdr = `const unsigned char ${nm}[] ${progmem.checked?'PROGMEM ':''}= {\n    ${hex}\n};\n\nconst int ${nm}_width = ${W};\nconst int ${nm}_height = ${H};\n`;
-      const emoteLine = sym? `\n// Add to your emote table:\n// { "${sym}", ${nm}, ${nm}_width, ${nm}_height },\n` : '';
+      const emoteLine = sym? `\n// Add to your emote table:\n// { "${symEscaped}", ${nm}, ${nm}_width, ${nm}_height },\n` : '';
       return hdr + emoteLine;
     }
 
