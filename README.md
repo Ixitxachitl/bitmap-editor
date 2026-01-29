@@ -71,4 +71,4 @@ MeshPet adds a virtual pet to your Meshtastic device that reacts to network acti
 
 ## 📄 License
 
-MIT License - See [LICENSE](LICENSE) file for details.
+GPL-3.0 License - See [LICENSE](LICENSE) file for details.
