@@ -1283,7 +1283,9 @@
 
     // --- Import/Export ---
     function parseHexInput(str){
-      const bytes=[]; str.replace(/0x[0-9a-fA-F]{1,2}|\b\d+\b/g, m=>{ bytes.push(Number(m.startsWith('0x')?m:('0x'+(+m).toString(16)))); });
+      // Remove #define lines and other preprocessor directives before parsing
+      const cleaned = str.replace(/^\s*#.*$/gm, '');
+      const bytes=[]; cleaned.replace(/0x[0-9a-fA-F]{1,2}|\b\d+\b/g, m=>{ bytes.push(Number(m.startsWith('0x')?m:('0x'+(+m).toString(16)))); });
       return bytes;
     }
 
@@ -1296,16 +1298,21 @@
       }
       
       // Auto-detect XBM format by looking for #define headers
-      const widthMatch = text.match(/#define\s+\w+_width\s+(\d+)/);
-      const heightMatch = text.match(/#define\s+\w+_height\s+(\d+)/);
+      const widthMatch = text.match(/#define\s+(\w+_)?width\s+(\d+)/);
+      const heightMatch = text.match(/#define\s+(\w+_)?height\s+(\d+)/);
       const nameMatch = text.match(/(?:static\s+)?(?:const\s+)?(?:unsigned\s+)?(?:char|uint8_t)\s+(\w+?)(?:_bits)?\s*\[\s*\]/);
       const isXbm = widthMatch || heightMatch;
       
       // Source dimensions (how bytes are organized): manual input > XBM headers > canvas size
-      const srcW = +iw.value || (widthMatch ? parseInt(widthMatch[1]) : state.w);
-      const srcH = +ih.value || (heightMatch ? parseInt(heightMatch[1]) : state.h);
+      const srcW = +iw.value || (widthMatch ? parseInt(widthMatch[2]) : state.w);
+      const srcH = +ih.value || (heightMatch ? parseInt(heightMatch[2]) : state.h);
       
-      // Target is current canvas size - don't resize, just import what fits
+      // When XBM detected and no manual canvas size set differently, resize canvas to source
+      if (isXbm && !+iw.value && !+ih.value) {
+        setSize(srcW, srcH);
+      }
+      
+      // Target is current canvas size
       const dstW = state.w;
       const dstH = state.h;
       
