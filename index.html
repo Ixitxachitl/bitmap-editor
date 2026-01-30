@@ -202,21 +202,21 @@
             <button class="btn small" id="importFileBtn" style="flex:1">📂 Import emotes.cpp</button>
           </div>
           <div class="legend" style="margin-bottom:10px">Tip: Select both .h and .cpp files for correct dimensions</div>
-          <label>Or paste hex bytes</label>
-          <textarea id="in" class="mono" style="min-height:50px" placeholder="0x00, 0x1C, ..."></textarea>
+          <label>Or paste hex bytes / XBM</label>
+          <textarea id="in" class="mono" style="min-height:50px" placeholder="0x00, 0x1C, ... or XBM format"></textarea>
           <div class="controls" style="margin-top:8px">
             <div>
               <label>Width</label>
-              <input type="number" id="iw" min="1" max="256" placeholder="16"/>
+              <input type="number" id="iw" min="1" max="256" placeholder="auto"/>
             </div>
             <div>
               <label>Height</label>
-              <input type="number" id="ih" min="1" max="256" placeholder="16"/>
+              <input type="number" id="ih" min="1" max="256" placeholder="auto"/>
             </div>
           </div>
+          <div class="legend" style="margin-top:4px">XBM headers auto-detected. Leave dimensions blank to use settings or XBM headers.</div>
           <div class="row" style="margin-top:8px">
-            <button id="importBtn" class="btn small">Import Hex</button>
-            <button id="importXbmBtn" class="btn small">Import XBM</button>
+            <button id="importBtn" class="btn small">Import</button>
             <button id="pasteImageBtn" class="btn small">📋 Paste Image</button>
           </div>
         </div>
@@ -495,7 +495,6 @@
 
     // Legacy single-emote buttons (keep for Import Single section)
     $('#importBtn').onclick = () => { pushHistory(); importFromHex(); };
-    $('#importXbmBtn').onclick = () => { pushHistory(); importFromXbm(); };
     $('#exportXbmBtn').onclick = () => {
       out.value = makeXbmArray();
       out.scrollTop = 0;
@@ -632,15 +631,20 @@
 
     // --- Drawing helpers ---
     function setSize(w,h,noDraw=false){
+      const oldW = state.w;
+      const oldH = state.h;
+      const oldPixels = state.pixels.slice();
+      
       state.w = Math.max(1, Math.min(128, w|0));
       state.h = Math.max(1, Math.min(128, h|0));
       wIn.value = state.w; hIn.value = state.h;
       resizeCanvas();
-      // keep data, cropping or padding as needed
+      
+      // Preserve existing image data, cropping or padding as needed
       const next = new Array(state.w*state.h).fill(0);
-      for(let y=0;y<Math.min(state.h, pixelsH());y++){
-        for(let x=0;x<Math.min(state.w, pixelsW());x++){
-          next[y*state.w + x] = state.pixels[y*pixelsW()+x]||0;
+      for(let y=0; y < Math.min(state.h, oldH); y++){
+        for(let x=0; x < Math.min(state.w, oldW); x++){
+          next[y*state.w + x] = oldPixels[y*oldW + x] || 0;
         }
       }
       state.pixels = next;
@@ -1284,65 +1288,58 @@
     }
 
     function importFromHex(){
-      const bytes = parseHexInput(importArea.value);
-      const W = +iw.value||state.w; const H = +ih.value||state.h;
-      setSize(W,H); clearPixels();
-      // Use main export options for bit order and padding
-      const order = bitOrder.value; const pad = padRows.checked;
-      let idx=0;
-      for(let y=0;y<H;y++){
-        for(let x=0;x<W;x++){
-          const bitIndex = pad ? x%8 : ((y*W+x)%8);
-          if(bitIndex===0){ var b = bytes[idx++]||0; }
-          const bit = (order==='msb0') ? ((b & (0x80>>bitIndex))!==0) : ((b & (1<<bitIndex))!==0);
-          setPx(x,y, bit?1:0);
-        }
-        if(pad){ const rem = W%8; if(rem!==0) idx += (8-rem)/8; }
-      }
-      saveCurrentEmote();
-      draw(); toast('Imported '+bytes.length+' byte(s)');
-    }
-
-    // XBM format import
-    function importFromXbm(){
       const text = importArea.value;
-      
-      // Parse width and height from XBM header (e.g., #define icon_width 56, #define icon_height 26)
-      const widthMatch = text.match(/#define\s+\w+_width\s+(\d+)/);
-      const heightMatch = text.match(/#define\s+\w+_height\s+(\d+)/);
-      
-      // Also try to extract name from the array declaration
-      const nameMatch = text.match(/(?:static\s+)?(?:const\s+)?(?:unsigned\s+)?(?:char|uint8_t)\s+(\w+?)(?:_bits)?\s*\[\s*\]/);
-      
-      let W = widthMatch ? parseInt(widthMatch[1]) : (+iw.value || state.w);
-      let H = heightMatch ? parseInt(heightMatch[1]) : (+ih.value || state.h);
-      
-      // Override with manual input if provided
-      if (+iw.value) W = +iw.value;
-      if (+ih.value) H = +ih.value;
-      
-      // Parse the bytes - XBM uses 0x00 format
       const bytes = parseHexInput(text);
       if (bytes.length === 0) {
-        toast('No valid XBM data found');
+        toast('No valid data found');
         return;
       }
       
-      setSize(W, H);
+      // Auto-detect XBM format by looking for #define headers
+      const widthMatch = text.match(/#define\s+\w+_width\s+(\d+)/);
+      const heightMatch = text.match(/#define\s+\w+_height\s+(\d+)/);
+      const nameMatch = text.match(/(?:static\s+)?(?:const\s+)?(?:unsigned\s+)?(?:char|uint8_t)\s+(\w+?)(?:_bits)?\s*\[\s*\]/);
+      const isXbm = widthMatch || heightMatch;
+      
+      // Source dimensions (how bytes are organized): manual input > XBM headers > canvas size
+      const srcW = +iw.value || (widthMatch ? parseInt(widthMatch[1]) : state.w);
+      const srcH = +ih.value || (heightMatch ? parseInt(heightMatch[1]) : state.h);
+      
+      // Target is current canvas size - don't resize, just import what fits
+      const dstW = state.w;
+      const dstH = state.h;
+      
       clearPixels();
       
-      // XBM format: LSB first, rows padded to byte boundary
-      const bytesPerRow = Math.ceil(W / 8);
-      let idx = 0;
+      // Use XBM format (LSB, padded) if detected, otherwise use settings
+      const order = isXbm ? 'lsb0' : bitOrder.value;
+      const pad = isXbm ? true : padRows.checked;
       
-      for (let y = 0; y < H; y++) {
-        for (let x = 0; x < W; x++) {
-          const byteIndex = y * bytesPerRow + Math.floor(x / 8);
-          const bitIndex = x % 8;
-          const b = bytes[byteIndex] || 0;
-          // XBM uses LSB first (bit 0 = leftmost pixel)
-          const bit = (b & (1 << bitIndex)) !== 0;
-          setPx(x, y, bit ? 1 : 0);
+      if (pad) {
+        // Padded mode: each row is padded to byte boundary
+        const bytesPerRow = Math.ceil(srcW / 8);
+        for (let y = 0; y < Math.min(srcH, dstH); y++) {
+          for (let x = 0; x < Math.min(srcW, dstW); x++) {
+            const byteIndex = y * bytesPerRow + Math.floor(x / 8);
+            const bitIndex = x % 8;
+            const b = bytes[byteIndex] || 0;
+            const bit = (order === 'msb0') ? ((b & (0x80 >> bitIndex)) !== 0) : ((b & (1 << bitIndex)) !== 0);
+            setPx(x, y, bit ? 1 : 0);
+          }
+        }
+      } else {
+        // Non-padded mode: bits are packed continuously
+        // Note: this only works correctly when importing full source, not cropping
+        let idx = 0;
+        for (let y = 0; y < srcH; y++) {
+          for (let x = 0; x < srcW; x++) {
+            const bitIndex = (y * srcW + x) % 8;
+            if (bitIndex === 0) { var b = bytes[idx++] || 0; }
+            if (x < dstW && y < dstH) {
+              const bit = (order === 'msb0') ? ((b & (0x80 >> bitIndex)) !== 0) : ((b & (1 << bitIndex)) !== 0);
+              setPx(x, y, bit ? 1 : 0);
+            }
+          }
         }
       }
       
@@ -1356,7 +1353,9 @@
       
       saveCurrentEmote();
       draw();
-      toast('Imported XBM: ' + W + 'x' + H + ' (' + bytes.length + ' bytes)');
+      const formatInfo = isXbm ? 'XBM detected, ' : '';
+      const cropInfo = (srcW > dstW || srcH > dstH) ? ' (cropped to ' + dstW + 'x' + dstH + ')' : '';
+      toast(formatInfo + 'Imported ' + srcW + 'x' + srcH + cropInfo);
     }
 
     // XBM format export
