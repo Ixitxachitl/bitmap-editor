@@ -52,6 +52,21 @@
     .anim-item .name{font-weight:600}
     .anim-item .count{color:var(--muted);font-size:11px}
     
+    /* Mode tabs */
+    .mode-tabs{display:flex;gap:4px;margin-bottom:10px}
+    .mode-tab{flex:1;padding:8px 12px;border:1px solid #2b3650;background:#202635;color:var(--muted);border-radius:8px;cursor:pointer;text-align:center;font-size:12px;font-weight:600;transition:all 0.15s}
+    .mode-tab:hover{background:#2a3448;border-color:#3a4a6a}
+    .mode-tab.active{background:#2d3a5a;border-color:var(--accent);color:var(--text)}
+    
+    /* Static icon list */
+    .icon-list{max-height:150px;overflow-y:auto;border:1px solid #243048;border-radius:8px;background:var(--panel-2);margin-bottom:10px}
+    .icon-item{padding:8px 10px;border-bottom:1px solid #1a2030;cursor:pointer;font-size:12px;display:flex;justify-content:space-between;align-items:center}
+    .icon-item:last-child{border-bottom:none}
+    .icon-item:hover{background:#232d42}
+    .icon-item.selected{background:#2a3a5a;border-left:3px solid var(--accent)}
+    .icon-item .name{font-weight:600}
+    .icon-item .dims{color:var(--muted);font-size:11px}
+    
     /* Frame strip */
     .frame-strip{display:flex;gap:6px;flex-wrap:wrap;padding:8px;background:var(--panel-2);border-radius:8px;min-height:60px;align-items:center}
     .frame-thumb{width:48px;height:48px;border:2px solid #2a3a50;border-radius:6px;cursor:pointer;image-rendering:pixelated;background:#0f1115}
@@ -112,21 +127,53 @@
     <!-- Left column: Animations + Frames + Tools -->
     <div class="col" id="leftCol">
       <section class="card">
-        <h2>🎬 Animations</h2>
+        <h2>📁 Edit Mode</h2>
         <div class="body">
-          <div class="row" style="margin-bottom:10px">
-            <select id="animSelect" style="flex:1"></select>
-            <button class="btn small" id="addAnimBtn">+ Add</button>
-            <button class="btn small danger" id="delAnimBtn">Delete</button>
+          <div class="mode-tabs">
+            <div class="mode-tab active" data-mode="animation">🎬 Animations</div>
+            <div class="mode-tab" data-mode="static">🖼️ Static Icons</div>
           </div>
-          <label>Animation Name (C identifier)</label>
-          <input type="text" id="animName" placeholder="e.g. petIdle"/>
-          <label>Comment</label>
-          <input type="text" id="animComment" placeholder="e.g. Idle breathing animation"/>
+          
+          <!-- Animation mode content -->
+          <div id="animationModeContent">
+            <div class="row" style="margin-bottom:10px">
+              <select id="animSelect" style="flex:1"></select>
+              <button class="btn small" id="addAnimBtn">+ Add</button>
+              <button class="btn small danger" id="delAnimBtn">Delete</button>
+            </div>
+            <label>Animation Name (C identifier)</label>
+            <input type="text" id="animName" placeholder="e.g. petIdle"/>
+            <label>Comment</label>
+            <input type="text" id="animComment" placeholder="e.g. Idle breathing animation"/>
+          </div>
+          
+          <!-- Static icon mode content -->
+          <div id="staticModeContent" style="display:none">
+            <div class="icon-list" id="iconList"></div>
+            <div class="row" style="margin-bottom:10px">
+              <button class="btn small" id="addIconBtn">+ Add Icon</button>
+              <button class="btn small danger" id="delIconBtn">Delete Icon</button>
+            </div>
+            <label>Icon Name (C identifier)</label>
+            <input type="text" id="iconName" placeholder="e.g. expIcon"/>
+            <label>Comment</label>
+            <input type="text" id="iconComment" placeholder="e.g. Experience icon"/>
+            <div class="row" style="margin-top:8px">
+              <div style="flex:1">
+                <label>Icon Width</label>
+                <input type="number" id="iconWidth" value="8" min="1" max="64"/>
+              </div>
+              <div style="flex:1">
+                <label>Icon Height</label>
+                <input type="number" id="iconHeight" value="8" min="1" max="64"/>
+              </div>
+            </div>
+            <div class="legend" style="margin-top:8px">Static icons can have custom dimensions separate from animations.</div>
+          </div>
         </div>
       </section>
       
-      <section class="card">
+      <section class="card" id="framesCard">
         <h2>🖼️ Frames</h2>
         <div class="body">
           <div class="frame-strip" id="frameStrip">
@@ -223,7 +270,7 @@
         <h2>▶️ Preview</h2>
         <div class="body preview-container">
           <canvas id="preview" width="72" height="72"></canvas>
-          <div class="playback-controls">
+          <div class="playback-controls" id="playbackControls">
             <button class="btn small" id="playBtn">▶ Play</button>
             <button class="btn small" id="stopBtn">⏹ Stop</button>
             <label style="margin:0;display:flex;align-items:center;gap:4px">
@@ -345,6 +392,8 @@
       playInterval: null,
       speed: 300,
       staticIcons: [], // Non-animation images like expIcon
+      currentIcon: 0,  // Currently selected static icon index
+      editMode: 'animation', // 'animation' or 'static'
       drawInverted: false,  // When true, left click erases, right click draws
       rectFilled: false,    // Toggle for filled rectangle
       circleFilled: false,  // Toggle for filled circle
@@ -400,6 +449,7 @@
       
       populateAnimSelect();
       updateFrameStrip();
+      updateIconList();
       resizeCanvas();
       draw();
       bindEvents();
@@ -460,12 +510,203 @@
       return state.animations[state.currentAnim];
     }
     
+    function currentIcon() {
+      return state.staticIcons[state.currentIcon];
+    }
+    
     function currentPixels() {
+      if (state.editMode === 'static') {
+        const icon = currentIcon();
+        if (!icon) return new Array(state.w * state.h).fill(0);
+        if (!icon.pixels) {
+          // Convert bytes to pixels if needed
+          const w = icon.width || state.w;
+          const h = icon.height || state.h;
+          icon.pixels = unpackIconBytes(icon.bytes, w, h);
+        }
+        return icon.pixels;
+      }
       const anim = currentAnim();
       if (!anim.frames[state.currentFrame]) {
         anim.frames[state.currentFrame] = new Array(state.w * state.h).fill(0);
       }
       return anim.frames[state.currentFrame];
+    }
+    
+    function getEditDimensions() {
+      if (state.editMode === 'static') {
+        const icon = currentIcon();
+        if (icon) {
+          return { w: icon.width || state.w, h: icon.height || state.h };
+        }
+      }
+      return { w: state.w, h: state.h };
+    }
+    
+    function unpackIconBytes(bytes, w, h) {
+      const pixels = new Array(w * h).fill(0);
+      let idx = 0;
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const bitIndex = x % 8;
+          if (bitIndex === 0) var b = bytes[idx++] || 0;
+          pixels[y * w + x] = (b & (1 << bitIndex)) ? 1 : 0;
+        }
+      }
+      return pixels;
+    }
+    
+    function packIconPixels(pixels, w, h) {
+      const bytes = [];
+      let cur = 0, count = 0;
+      const lsb = state.bitOrder === 'lsb0';
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const bit = pixels[y * w + x] ? 1 : 0;
+          if (lsb) {
+            cur |= (bit << count);
+          } else {
+            cur |= (bit << (7 - count));
+          }
+          count++;
+          if (count === 8) {
+            bytes.push(cur);
+            cur = 0; count = 0;
+          }
+        }
+        // Pad row to byte boundary
+        if (state.padRows && count !== 0) {
+          bytes.push(cur);
+          cur = 0; count = 0;
+        }
+      }
+      if (!state.padRows && count !== 0) {
+        bytes.push(cur);
+      }
+      return bytes;
+    }
+    
+    // ============================================================================
+    // STATIC ICON MANAGEMENT
+    // ============================================================================
+    function updateIconList() {
+      const iconList = $('#iconList');
+      iconList.innerHTML = state.staticIcons.map((icon, i) => 
+        `<div class="icon-item${i === state.currentIcon ? ' selected' : ''}" data-index="${i}">
+          <span class="name">${icon.name}</span>
+          <span class="dims">${icon.width || '?'}x${icon.height || '?'}</span>
+        </div>`
+      ).join('');
+      
+      // Bind click events
+      iconList.querySelectorAll('.icon-item').forEach(item => {
+        item.onclick = () => selectIcon(parseInt(item.dataset.index));
+      });
+      
+      // Update icon name/comment fields
+      if (state.staticIcons.length > 0) {
+        const icon = currentIcon();
+        $('#iconName').value = icon.name;
+        $('#iconComment').value = icon.comment || '';
+        $('#iconWidth').value = icon.width || state.w;
+        $('#iconHeight').value = icon.height || state.h;
+      } else {
+        $('#iconName').value = '';
+        $('#iconComment').value = '';
+        $('#iconWidth').value = state.w;
+        $('#iconHeight').value = state.h;
+      }
+    }
+    
+    function selectIcon(i) {
+      state.currentIcon = Math.max(0, Math.min(i, state.staticIcons.length - 1));
+      updateIconList();
+      resizeCanvasForCurrentEdit();
+      draw();
+    }
+    
+    function resizeCanvasForCurrentEdit() {
+      const dims = getEditDimensions();
+      grid.width = dims.w * state.zoom;
+      grid.height = dims.h * state.zoom;
+    }
+    
+    function addStaticIcon() {
+      pushHistory();
+      const name = prompt('Icon name (e.g. expIcon):');
+      if (!name) return;
+      const w = parseInt($('#iconWidth').value) || state.w;
+      const h = parseInt($('#iconHeight').value) || state.h;
+      state.staticIcons.push({
+        name: name.replace(/\W/g, ''),
+        comment: '',
+        width: w,
+        height: h,
+        bytes: [],
+        pixels: new Array(w * h).fill(0)
+      });
+      state.currentIcon = state.staticIcons.length - 1;
+      updateIconList();
+      resizeCanvasForCurrentEdit();
+      draw();
+      generateOutput();
+    }
+    
+    function deleteStaticIcon() {
+      if (state.staticIcons.length === 0) {
+        toast('No icons to delete');
+        return;
+      }
+      const icon = currentIcon();
+      if (!confirm('Delete icon "' + icon.name + '"?')) return;
+      pushHistory();
+      state.staticIcons.splice(state.currentIcon, 1);
+      state.currentIcon = Math.min(state.currentIcon, state.staticIcons.length - 1);
+      updateIconList();
+      if (state.staticIcons.length > 0) {
+        resizeCanvasForCurrentEdit();
+      } else {
+        resizeCanvas();
+      }
+      draw();
+      generateOutput();
+    }
+    
+    function setEditMode(mode) {
+      state.editMode = mode;
+      
+      // Update UI
+      document.querySelectorAll('.mode-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.mode === mode);
+      });
+      $('#animationModeContent').style.display = mode === 'animation' ? 'block' : 'none';
+      $('#staticModeContent').style.display = mode === 'static' ? 'block' : 'none';
+      
+      // Update frames section visibility
+      const framesCard = $('#framesCard');
+      if (framesCard) {
+        framesCard.style.display = mode === 'animation' ? 'block' : 'none';
+      }
+      
+      // Update playback controls visibility
+      const playbackControls = $('#playbackControls');
+      if (playbackControls) {
+        playbackControls.style.display = mode === 'animation' ? 'flex' : 'none';
+      }
+      
+      // Stop animation playback when switching to static mode
+      if (mode === 'static') {
+        stopAnimation();
+      }
+      
+      // Resize canvas for current edit context
+      if (mode === 'static' && state.staticIcons.length > 0) {
+        resizeCanvasForCurrentEdit();
+      } else {
+        resizeCanvas();
+      }
+      
+      draw();
     }
     
     // ============================================================================
@@ -479,13 +720,16 @@
     function draw() {
       const z = state.zoom;
       const pixels = currentPixels();
+      const dims = getEditDimensions();
+      const w = dims.w;
+      const h = dims.h;
       
       g.fillStyle = '#0b0e16';
       g.fillRect(0, 0, grid.width, grid.height);
       
-      for (let y = 0; y < state.h; y++) {
-        for (let x = 0; x < state.w; x++) {
-          g.fillStyle = pixels[y * state.w + x] ? '#e5e9f0' : '#0f1115';
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          g.fillStyle = pixels[y * w + x] ? '#e5e9f0' : '#0f1115';
           g.fillRect(x * z, y * z, z, z);
         }
       }
@@ -500,7 +744,7 @@
             const px = selMinX + dx;
             const py = selMinY + dy;
             // Draw even if outside canvas bounds (will be clipped on commit)
-            if (px >= 0 && px < state.w && py >= 0 && py < state.h) {
+            if (px >= 0 && px < w && py >= 0 && py < h) {
               if (selection.floatingPixels[dy][dx]) {
                 g.fillStyle = '#7cffb0';
                 g.fillRect(px * z, py * z, z, z);
@@ -515,11 +759,11 @@
         g.strokeStyle = '#2b3245';
         g.lineWidth = 1;
         g.beginPath();
-        for (let x = 0; x <= state.w; x++) {
+        for (let x = 0; x <= w; x++) {
           g.moveTo(x * z + 0.5, 0);
           g.lineTo(x * z + 0.5, grid.height);
         }
-        for (let y = 0; y <= state.h; y++) {
+        for (let y = 0; y <= h; y++) {
           g.moveTo(0, y * z + 0.5);
           g.lineTo(grid.width, y * z + 0.5);
         }
@@ -531,7 +775,11 @@
       
       // Update preview
       drawPreview();
-      updateFrameStrip();
+      
+      // Only update frame strip in animation mode
+      if (state.editMode === 'animation') {
+        updateFrameStrip();
+      }
     }
     
     function drawSelectionOverlay() {
@@ -566,14 +814,17 @@
     
     function drawPreview() {
       const pixels = currentPixels();
+      const dims = getEditDimensions();
+      const w = dims.w;
+      const h = dims.h;
       const scale = 3;
-      preview.width = state.w * scale;
-      preview.height = state.h * scale;
+      preview.width = w * scale;
+      preview.height = h * scale;
       gp.fillStyle = '#0f1115';
       gp.fillRect(0, 0, preview.width, preview.height);
-      for (let y = 0; y < state.h; y++) {
-        for (let x = 0; x < state.w; x++) {
-          if (pixels[y * state.w + x]) {
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          if (pixels[y * w + x]) {
             gp.fillStyle = '#e5e9f0';
             gp.fillRect(x * scale, y * scale, scale, scale);
           }
@@ -602,13 +853,15 @@
     // PIXEL OPERATIONS
     // ============================================================================
     function setPx(x, y, v) {
-      if (x < 0 || y < 0 || x >= state.w || y >= state.h) return;
-      currentPixels()[y * state.w + x] = v;
+      const dims = getEditDimensions();
+      if (x < 0 || y < 0 || x >= dims.w || y >= dims.h) return;
+      currentPixels()[y * dims.w + x] = v;
     }
     
     function getPx(x, y) {
-      if (x < 0 || y < 0 || x >= state.w || y >= state.h) return 0;
-      return currentPixels()[y * state.w + x] | 0;
+      const dims = getEditDimensions();
+      if (x < 0 || y < 0 || x >= dims.w || y >= dims.h) return 0;
+      return currentPixels()[y * dims.w + x] | 0;
     }
     
     function clearFrame() {
@@ -621,6 +874,10 @@
     
     function invertFrame() {
       pushHistory();
+      
+      const dims = getEditDimensions();
+      const w = dims.w;
+      const h = dims.h;
       
       // If there's an active selection, only invert that
       if (selection.active) {
@@ -640,8 +897,8 @@
           const pixels = currentPixels();
           for (let y = minY; y <= maxY; y++) {
             for (let x = minX; x <= maxX; x++) {
-              if (x >= 0 && x < state.w && y >= 0 && y < state.h) {
-                const i = y * state.w + x;
+              if (x >= 0 && x < w && y >= 0 && y < h) {
+                const i = y * w + x;
                 pixels[i] = pixels[i] ? 0 : 1;
               }
             }
@@ -660,6 +917,10 @@
     function flipH() {
       pushHistory();
       
+      const dims = getEditDimensions();
+      const w = dims.w;
+      const h = dims.h;
+      
       // If there's an active selection, only flip that
       if (selection.active) {
         if (selection.floatingPixels) {
@@ -677,8 +938,8 @@
             // Extract row within selection
             const row = [];
             for (let x = minX; x <= maxX; x++) {
-              if (x >= 0 && x < state.w && y >= 0 && y < state.h) {
-                row.push(pixels[y * state.w + x]);
+              if (x >= 0 && x < w && y >= 0 && y < h) {
+                row.push(pixels[y * w + x]);
               } else {
                 row.push(0);
               }
@@ -686,8 +947,8 @@
             // Write back reversed
             row.reverse();
             for (let x = minX; x <= maxX; x++) {
-              if (x >= 0 && x < state.w && y >= 0 && y < state.h) {
-                pixels[y * state.w + x] = row[x - minX];
+              if (x >= 0 && x < w && y >= 0 && y < h) {
+                pixels[y * w + x] = row[x - minX];
               }
             }
           }
@@ -695,13 +956,17 @@
       } else {
         // Flip entire frame
         const pixels = currentPixels();
-        const out = new Array(state.w * state.h).fill(0);
-        for (let y = 0; y < state.h; y++) {
-          for (let x = 0; x < state.w; x++) {
-            out[y * state.w + x] = pixels[y * state.w + (state.w - 1 - x)];
+        const out = new Array(w * h).fill(0);
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            out[y * w + x] = pixels[y * w + (w - 1 - x)];
           }
         }
-        currentAnim().frames[state.currentFrame] = out;
+        if (state.editMode === 'static') {
+          currentIcon().pixels = out;
+        } else {
+          currentAnim().frames[state.currentFrame] = out;
+        }
       }
       
       draw();
@@ -710,6 +975,10 @@
     
     function flipV() {
       pushHistory();
+      
+      const dims = getEditDimensions();
+      const w = dims.w;
+      const h = dims.h;
       
       // If there's an active selection, only flip that
       if (selection.active) {
@@ -730,8 +999,8 @@
           for (let y = minY; y <= maxY; y++) {
             temp[y - minY] = [];
             for (let x = minX; x <= maxX; x++) {
-              if (x >= 0 && x < state.w && y >= 0 && y < state.h) {
-                temp[y - minY][x - minX] = pixels[y * state.w + x];
+              if (x >= 0 && x < w && y >= 0 && y < h) {
+                temp[y - minY][x - minX] = pixels[y * w + x];
               } else {
                 temp[y - minY][x - minX] = 0;
               }
@@ -741,8 +1010,8 @@
           // Write back flipped
           for (let y = minY; y <= maxY; y++) {
             for (let x = minX; x <= maxX; x++) {
-              if (x >= 0 && x < state.w && y >= 0 && y < state.h) {
-                pixels[y * state.w + x] = temp[maxY - y][x - minX];
+              if (x >= 0 && x < w && y >= 0 && y < h) {
+                pixels[y * w + x] = temp[maxY - y][x - minX];
               }
             }
           }
@@ -750,13 +1019,17 @@
       } else {
         // Flip entire frame
         const pixels = currentPixels();
-        const out = new Array(state.w * state.h).fill(0);
-        for (let y = 0; y < state.h; y++) {
-          for (let x = 0; x < state.w; x++) {
-            out[y * state.w + x] = pixels[(state.h - 1 - y) * state.w + x];
+        const out = new Array(w * h).fill(0);
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            out[y * w + x] = pixels[(h - 1 - y) * w + x];
           }
         }
-        currentAnim().frames[state.currentFrame] = out;
+        if (state.editMode === 'static') {
+          currentIcon().pixels = out;
+        } else {
+          currentAnim().frames[state.currentFrame] = out;
+        }
       }
       
       draw();
@@ -764,12 +1037,13 @@
     }
     
     function floodFill(startX, startY, newVal) {
+      const dims = getEditDimensions();
       const target = getPx(startX, startY);
       if (target === newVal) return;
       const stack = [[startX, startY]];
       while (stack.length) {
         const [x, y] = stack.pop();
-        if (x < 0 || y < 0 || x >= state.w || y >= state.h) continue;
+        if (x < 0 || y < 0 || x >= dims.w || y >= dims.h) continue;
         if (getPx(x, y) !== target) continue;
         setPx(x, y, newVal);
         stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
@@ -783,7 +1057,10 @@
       return JSON.parse(JSON.stringify({
         animations: state.animations,
         currentAnim: state.currentAnim,
-        currentFrame: state.currentFrame
+        currentFrame: state.currentFrame,
+        staticIcons: state.staticIcons,
+        currentIcon: state.currentIcon,
+        editMode: state.editMode
       }));
     }
     
@@ -800,7 +1077,11 @@
       state.animations = prev.animations;
       state.currentAnim = prev.currentAnim;
       state.currentFrame = prev.currentFrame;
+      state.staticIcons = prev.staticIcons || [];
+      state.currentIcon = prev.currentIcon || 0;
+      state.editMode = prev.editMode || 'animation';
       populateAnimSelect();
+      updateIconList();
       updateFrameStrip();
       draw();
       generateOutput();
@@ -813,7 +1094,11 @@
       state.animations = next.animations;
       state.currentAnim = next.currentAnim;
       state.currentFrame = next.currentFrame;
+      state.staticIcons = next.staticIcons || [];
+      state.currentIcon = next.currentIcon || 0;
+      state.editMode = next.editMode || 'animation';
       populateAnimSelect();
+      updateIconList();
       updateFrameStrip();
       draw();
       generateOutput();
@@ -1001,6 +1286,8 @@
       const width = maxX - minX + 1;
       const height = maxY - minY + 1;
       
+      const dims = getEditDimensions();
+      
       // Extract pixels from selection area
       selection.floatingPixels = [];
       const pixels = currentPixels();
@@ -1010,10 +1297,10 @@
         for (let dx = 0; dx < width; dx++) {
           const px = minX + dx;
           const py = minY + dy;
-          if (px >= 0 && px < state.w && py >= 0 && py < state.h) {
-            selection.floatingPixels[dy][dx] = pixels[py * state.w + px];
+          if (px >= 0 && px < dims.w && py >= 0 && py < dims.h) {
+            selection.floatingPixels[dy][dx] = pixels[py * dims.w + px];
             // Clear original position
-            pixels[py * state.w + px] = 0;
+            pixels[py * dims.w + px] = 0;
           } else {
             selection.floatingPixels[dy][dx] = 0;
           }
@@ -1033,6 +1320,8 @@
         return;
       }
       
+      const dims = getEditDimensions();
+      
       // For floating selections, startX/startY is always the top-left
       const minX = selection.startX;
       const minY = selection.startY;
@@ -1043,9 +1332,9 @@
         for (let dx = 0; dx < selection.floatingPixels[dy].length; dx++) {
           const px = minX + dx;
           const py = minY + dy;
-          if (px >= 0 && px < state.w && py >= 0 && py < state.h) {
+          if (px >= 0 && px < dims.w && py >= 0 && py < dims.h) {
             if (selection.floatingPixels[dy][dx]) {
-              pixels[py * state.w + px] = 1;
+              pixels[py * dims.w + px] = 1;
             }
           }
         }
@@ -1081,6 +1370,7 @@
         const width = maxX - minX + 1;
         const height = maxY - minY + 1;
         
+        const dims = getEditDimensions();
         const pixels = currentPixels();
         internalClipboard = [];
         for (let dy = 0; dy < height; dy++) {
@@ -1088,8 +1378,8 @@
           for (let dx = 0; dx < width; dx++) {
             const px = minX + dx;
             const py = minY + dy;
-            if (px >= 0 && px < state.w && py >= 0 && py < state.h) {
-              internalClipboard[dy][dx] = pixels[py * state.w + px] ? 1 : 0;
+            if (px >= 0 && px < dims.w && py >= 0 && py < dims.h) {
+              internalClipboard[dy][dx] = pixels[py * dims.w + px] ? 1 : 0;
             } else {
               internalClipboard[dy][dx] = 0;
             }
@@ -1181,8 +1471,9 @@
     
     function eventToCell(e) {
       const r = grid.getBoundingClientRect();
-      const x = Math.min(state.w - 1, Math.max(0, Math.floor((e.clientX - r.left) / state.zoom)));
-      const y = Math.min(state.h - 1, Math.max(0, Math.floor((e.clientY - r.top) / state.zoom)));
+      const dims = getEditDimensions();
+      const x = Math.min(dims.w - 1, Math.max(0, Math.floor((e.clientX - r.left) / state.zoom)));
+      const y = Math.min(dims.h - 1, Math.max(0, Math.floor((e.clientY - r.top) / state.zoom)));
       return { x, y };
     }
     
@@ -1260,7 +1551,8 @@
     function rotateLeft() {
       pushHistory();
       const pixels = currentPixels();
-      const W = state.w, H = state.h;
+      const dims = getEditDimensions();
+      const W = dims.w, H = dims.h;
       const out = new Array(W * H).fill(0);
       for (let y = 0; y < H; y++) {
         for (let x = 0; x < W; x++) {
@@ -1268,7 +1560,11 @@
           out[ny * H + nx] = pixels[y * W + x];
         }
       }
-      currentAnim().frames[state.currentFrame] = out;
+      if (state.editMode === 'static') {
+        currentIcon().pixels = out;
+      } else {
+        currentAnim().frames[state.currentFrame] = out;
+      }
       draw();
       generateOutput();
     }
@@ -1276,7 +1572,8 @@
     function rotateRight() {
       pushHistory();
       const pixels = currentPixels();
-      const W = state.w, H = state.h;
+      const dims = getEditDimensions();
+      const W = dims.w, H = dims.h;
       const out = new Array(W * H).fill(0);
       for (let y = 0; y < H; y++) {
         for (let x = 0; x < W; x++) {
@@ -1284,7 +1581,11 @@
           out[ny * H + nx] = pixels[y * W + x];
         }
       }
-      currentAnim().frames[state.currentFrame] = out;
+      if (state.editMode === 'static') {
+        currentIcon().pixels = out;
+      } else {
+        currentAnim().frames[state.currentFrame] = out;
+      }
       draw();
       generateOutput();
     }
@@ -1383,14 +1684,44 @@
       
       out += '\n';
       
-      // Static icons first (preserved from import)
+      // Static icons first (preserved from import or created)
       if (state.staticIcons && state.staticIcons.length > 0) {
         out += `// ============================================================================\n`;
         out += `// STATIC ICONS\n`;
         out += `// ============================================================================\n\n`;
         
+        // Group icons by base name pattern to share dimensions
+        // e.g., speed0_icon, speed25_icon -> base "speed_icon"
+        const iconGroups = {};
+        const standaloneIcons = [];
+        
         state.staticIcons.forEach(icon => {
-          const hex = icon.bytes.map(b => '0x' + b.toString(16).toUpperCase().padStart(2, '0')).join(', ');
+          // Check if this icon matches pattern: base + number + suffix (e.g., speed0_icon)
+          const baseMatch = icon.name.match(/^(\w+?)(\d+)(_\w+)$/);
+          if (baseMatch) {
+            const baseName = baseMatch[1] + baseMatch[3]; // e.g., "speed_icon"
+            if (!iconGroups[baseName]) {
+              iconGroups[baseName] = [];
+            }
+            iconGroups[baseName].push(icon);
+          } else {
+            standaloneIcons.push(icon);
+          }
+        });
+        
+        // Output standalone icons (with their own dimensions)
+        standaloneIcons.forEach(icon => {
+          // Use pixels if available (edited), otherwise fall back to bytes
+          let bytes;
+          if (icon.pixels) {
+            const w = icon.width || state.w;
+            const h = icon.height || state.h;
+            bytes = packIconPixels(icon.pixels, w, h);
+            icon.bytes = bytes; // Update stored bytes
+          } else {
+            bytes = icon.bytes || [];
+          }
+          const hex = bytes.map(b => '0x' + b.toString(16).toUpperCase().padStart(2, '0')).join(', ');
           if (icon.comment) {
             out += `// ${icon.name} - ${icon.comment}\n`;
           }
@@ -1402,6 +1733,38 @@
             out += `const uint8_t ${icon.name}_height = ${icon.height};\n`;
           }
           out += `const uint8_t ${icon.name}[]${pm} = {${hex}};\n\n`;
+        });
+        
+        // Output grouped icons (shared dimensions)
+        Object.keys(iconGroups).forEach(baseName => {
+          const group = iconGroups[baseName];
+          if (group.length === 0) return;
+          
+          // Get dimensions from first icon in group (they should all share the same)
+          const firstIcon = group[0];
+          const w = firstIcon.width || state.w;
+          const h = firstIcon.height || state.h;
+          
+          // Output shared dimensions with comment
+          out += `// ${baseName.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}s (${w}x${h})\n`;
+          out += `const uint8_t ${baseName}_width = ${w};\n`;
+          out += `const uint8_t ${baseName}_height = ${h};\n\n`;
+          
+          // Output each icon in the group
+          group.forEach(icon => {
+            let bytes;
+            if (icon.pixels) {
+              bytes = packIconPixels(icon.pixels, w, h);
+              icon.bytes = bytes;
+            } else {
+              bytes = icon.bytes || [];
+            }
+            const hex = bytes.map(b => '0x' + b.toString(16).toUpperCase().padStart(2, '0')).join(', ');
+            if (icon.comment) {
+              out += `// ${icon.comment}\n`;
+            }
+            out += `const uint8_t ${icon.name}[]${pm} = {${hex}};\n\n`;
+          });
         });
       }
       
@@ -1459,10 +1822,26 @@
         return;
       }
       pushHistory();
-      currentAnim().frames[state.currentFrame] = unpackFrame(bytes);
+      
+      if (state.editMode === 'static') {
+        // Import to current static icon
+        if (state.staticIcons.length === 0) {
+          toast('Add a static icon first');
+          return;
+        }
+        const icon = currentIcon();
+        const w = icon.width || state.w;
+        const h = icon.height || state.h;
+        icon.bytes = bytes;
+        icon.pixels = unpackIconBytes(bytes, w, h);
+        toast('Icon imported');
+      } else {
+        // Import to current animation frame
+        currentAnim().frames[state.currentFrame] = unpackFrame(bytes);
+        toast('Frame imported');
+      }
       draw();
       generateOutput();
-      toast('Frame imported');
     }
     
     function importPetImagesH(content) {
@@ -1530,9 +1909,22 @@
           
           if (!isNumberedFrame || !hasFramesArray) {
             // This is a standalone icon
-            // Try to find dimensions - check for exact name match
+            // Try to find dimensions - check for exact name match first
             // iconDimensions has keys like 'lvl_icon' from 'lvl_icon_width'
-            const dims = iconDimensions[frameName] || {};
+            let dims = iconDimensions[frameName] || {};
+            
+            // If no exact match, try to find a base name match
+            // e.g., for "speed0_icon", check "speed_icon" dimensions
+            if (!dims.width && !dims.height) {
+              // Try removing trailing numbers/identifiers to find base dimensions
+              // speed0_icon -> speed_icon, speed25_icon -> speed_icon
+              const baseMatch = frameName.match(/^(\w+?)(\d+)(_\w+)$/);
+              if (baseMatch) {
+                const baseDimName = baseMatch[1] + baseMatch[3]; // e.g., "speed" + "_icon" = "speed_icon"
+                dims = iconDimensions[baseDimName] || {};
+              }
+            }
+            
             state.staticIcons.push({
               name: frameName,
               bytes: frames[frameName],
@@ -1600,9 +1992,19 @@
       
       state.currentAnim = 0;
       state.currentFrame = 0;
+      state.currentIcon = 0;
+      
+      // Initialize pixels for static icons
+      state.staticIcons.forEach(icon => {
+        const w = icon.width || state.w;
+        const h = icon.height || state.h;
+        icon.pixels = unpackIconBytes(icon.bytes, w, h);
+      });
+      
       resizeCanvas();
       populateAnimSelect();
       updateFrameStrip();
+      updateIconList();
       draw();
       generateOutput();
       const iconCount = state.staticIcons.length;
@@ -1835,6 +2237,80 @@
         generateOutput();
       };
       
+      // Mode tabs
+      document.querySelectorAll('.mode-tab').forEach(tab => {
+        tab.onclick = () => setEditMode(tab.dataset.mode);
+      });
+      
+      // Static icon management
+      $('#addIconBtn').onclick = addStaticIcon;
+      $('#delIconBtn').onclick = deleteStaticIcon;
+      
+      $('#iconName').oninput = () => {
+        if (state.staticIcons.length === 0) return;
+        currentIcon().name = $('#iconName').value.replace(/\W/g, '');
+        updateIconList();
+        generateOutput();
+      };
+      
+      $('#iconComment').oninput = () => {
+        if (state.staticIcons.length === 0) return;
+        currentIcon().comment = $('#iconComment').value;
+        generateOutput();
+      };
+      
+      $('#iconWidth').onchange = () => {
+        if (state.staticIcons.length === 0) return;
+        pushHistory();
+        const icon = currentIcon();
+        const oldW = icon.width || state.w;
+        const oldH = icon.height || state.h;
+        const newW = Math.max(1, Math.min(64, parseInt($('#iconWidth').value) || state.w));
+        icon.width = newW;
+        
+        // Resize pixels array
+        const newPixels = new Array(newW * oldH).fill(0);
+        for (let y = 0; y < oldH; y++) {
+          for (let x = 0; x < Math.min(oldW, newW); x++) {
+            if (icon.pixels) {
+              newPixels[y * newW + x] = icon.pixels[y * oldW + x] || 0;
+            }
+          }
+        }
+        icon.pixels = newPixels;
+        icon.bytes = packIconPixels(icon.pixels, newW, oldH);
+        
+        resizeCanvasForCurrentEdit();
+        draw();
+        generateOutput();
+      };
+      
+      $('#iconHeight').onchange = () => {
+        if (state.staticIcons.length === 0) return;
+        pushHistory();
+        const icon = currentIcon();
+        const w = icon.width || state.w;
+        const oldH = icon.height || state.h;
+        const newH = Math.max(1, Math.min(64, parseInt($('#iconHeight').value) || state.h));
+        icon.height = newH;
+        
+        // Resize pixels array
+        const newPixels = new Array(w * newH).fill(0);
+        for (let y = 0; y < Math.min(oldH, newH); y++) {
+          for (let x = 0; x < w; x++) {
+            if (icon.pixels) {
+              newPixels[y * w + x] = icon.pixels[y * w + x] || 0;
+            }
+          }
+        }
+        icon.pixels = newPixels;
+        icon.bytes = packIconPixels(icon.pixels, w, newH);
+        
+        resizeCanvasForCurrentEdit();
+        draw();
+        generateOutput();
+      };
+      
       // Frame management
       $('#addFrameBtn').onclick = () => {
         pushHistory();
@@ -1972,7 +2448,11 @@
       
       $('#zoom').oninput = () => {
         state.zoom = parseInt($('#zoom').value);
-        resizeCanvas();
+        if (state.editMode === 'static' && state.staticIcons.length > 0) {
+          resizeCanvasForCurrentEdit();
+        } else {
+          resizeCanvas();
+        }
         draw();
       };
       
@@ -2106,11 +2586,12 @@
               const minY = Math.min(selection.startY, selection.endY);
               const maxX = Math.max(selection.startX, selection.endX);
               const maxY = Math.max(selection.startY, selection.endY);
+              const dims = getEditDimensions();
               const pixels = currentPixels();
               for (let y = minY; y <= maxY; y++) {
                 for (let x = minX; x <= maxX; x++) {
-                  if (x >= 0 && x < state.w && y >= 0 && y < state.h) {
-                    pixels[y * state.w + x] = 0;
+                  if (x >= 0 && x < dims.w && y >= 0 && y < dims.h) {
+                    pixels[y * dims.w + x] = 0;
                   }
                 }
               }
