@@ -216,6 +216,7 @@
           </div>
           <div class="row" style="margin-top:8px">
             <button id="importBtn" class="btn small">Import Hex</button>
+            <button id="importXbmBtn" class="btn small">Import XBM</button>
             <button id="pasteImageBtn" class="btn small">📋 Paste Image</button>
           </div>
         </div>
@@ -228,6 +229,8 @@
           <div class="row" style="margin-top:8px">
             <button class="btn small" id="exportBtn">Generate</button>
             <button class="btn small" id="copyBtn">Copy</button>
+            <button class="btn small" id="exportXbmBtn">XBM</button>
+            <button class="btn small" id="copyXbmBtn">Copy XBM</button>
           </div>
           <div class="row" style="margin-top:8px">
             <button class="btn small primary" id="exportFileBtn" style="flex:1">📂 Export .h + .cpp</button>
@@ -492,6 +495,16 @@
 
     // Legacy single-emote buttons (keep for Import Single section)
     $('#importBtn').onclick = () => { pushHistory(); importFromHex(); };
+    $('#importXbmBtn').onclick = () => { pushHistory(); importFromXbm(); };
+    $('#exportXbmBtn').onclick = () => {
+      out.value = makeXbmArray();
+      out.scrollTop = 0;
+    };
+    $('#copyXbmBtn').onclick = async () => {
+      if(!out.value) out.value = makeXbmArray();
+      await navigator.clipboard.writeText(out.value);
+      toast('XBM copied to clipboard');
+    };
     // Inputs
     wIn.oninput = () => { pushHistory(); setSize(+wIn.value, state.h); saveCurrentEmote(); };
     hIn.oninput = () => { pushHistory(); setSize(state.w, +hIn.value); saveCurrentEmote(); };
@@ -1288,6 +1301,100 @@
       }
       saveCurrentEmote();
       draw(); toast('Imported '+bytes.length+' byte(s)');
+    }
+
+    // XBM format import
+    function importFromXbm(){
+      const text = importArea.value;
+      
+      // Parse width and height from XBM header (e.g., #define icon_width 56, #define icon_height 26)
+      const widthMatch = text.match(/#define\s+\w+_width\s+(\d+)/);
+      const heightMatch = text.match(/#define\s+\w+_height\s+(\d+)/);
+      
+      // Also try to extract name from the array declaration
+      const nameMatch = text.match(/(?:static\s+)?(?:const\s+)?(?:unsigned\s+)?(?:char|uint8_t)\s+(\w+?)(?:_bits)?\s*\[\s*\]/);
+      
+      let W = widthMatch ? parseInt(widthMatch[1]) : (+iw.value || state.w);
+      let H = heightMatch ? parseInt(heightMatch[1]) : (+ih.value || state.h);
+      
+      // Override with manual input if provided
+      if (+iw.value) W = +iw.value;
+      if (+ih.value) H = +ih.value;
+      
+      // Parse the bytes - XBM uses 0x00 format
+      const bytes = parseHexInput(text);
+      if (bytes.length === 0) {
+        toast('No valid XBM data found');
+        return;
+      }
+      
+      setSize(W, H);
+      clearPixels();
+      
+      // XBM format: LSB first, rows padded to byte boundary
+      const bytesPerRow = Math.ceil(W / 8);
+      let idx = 0;
+      
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const byteIndex = y * bytesPerRow + Math.floor(x / 8);
+          const bitIndex = x % 8;
+          const b = bytes[byteIndex] || 0;
+          // XBM uses LSB first (bit 0 = leftmost pixel)
+          const bit = (b & (1 << bitIndex)) !== 0;
+          setPx(x, y, bit ? 1 : 0);
+        }
+      }
+      
+      // Update emote name if found in XBM
+      if (nameMatch) {
+        const extractedName = nameMatch[1].replace(/_bits$/, '');
+        nameIn.value = extractedName;
+        emotes[currentEmote].name = extractedName;
+        populateEmoteSelect();
+      }
+      
+      saveCurrentEmote();
+      draw();
+      toast('Imported XBM: ' + W + 'x' + H + ' (' + bytes.length + ' bytes)');
+    }
+
+    // XBM format export
+    function makeXbmArray(){
+      const nm = (nameIn.value || 'icon').replace(/\W+/g, '_');
+      const W = state.w, H = state.h;
+      const bytesPerRow = Math.ceil(W / 8);
+      const bytes = [];
+      
+      // XBM format: LSB first, rows padded to byte boundary
+      for (let y = 0; y < H; y++) {
+        for (let byteX = 0; byteX < bytesPerRow; byteX++) {
+          let byte = 0;
+          for (let bit = 0; bit < 8; bit++) {
+            const x = byteX * 8 + bit;
+            if (x < W && getPx(x, y)) {
+              byte |= (1 << bit);  // LSB first
+            }
+          }
+          bytes.push(byte);
+        }
+      }
+      
+      // Format as XBM C array with 8 bytes per line
+      const hexLines = [];
+      for (let i = 0; i < bytes.length; i += 8) {
+        const lineBytes = bytes.slice(i, i + 8);
+        const hex = lineBytes.map(b => '0x' + b.toString(16).padStart(2, '0')).join(', ');
+        hexLines.push('  ' + hex + (i + 8 < bytes.length ? ',' : ''));
+      }
+      
+      let code = `#define ${nm}_width ${W}\n`;
+      code += `#define ${nm}_height ${H}\n`;
+      code += `static uint8_t ${nm}_bits[] = {\n`;
+      code += hexLines.join('\n');
+      code += '\n};';
+      
+      return code;
     }
 
     // Clipboard image import
