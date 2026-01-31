@@ -273,6 +273,7 @@
           <div class="playback-controls" id="playbackControls">
             <button class="btn small" id="playBtn">▶ Play</button>
             <button class="btn small" id="stopBtn">⏹ Stop</button>
+            <button class="btn small" id="walkBtn">🚶 Walk</button>
             <label style="margin:0;display:flex;align-items:center;gap:4px">
               <span>Speed:</span>
               <input type="range" id="speedSlider" min="100" max="1000" value="300" style="width:80px"/>
@@ -391,6 +392,9 @@
       playing: false,
       playInterval: null,
       speed: 300,
+      walkEnabled: false,    // Walk mode moves sprite left/right
+      walkPosition: 0,       // Current walk position (0-20)
+      walkDirection: 1,      // 1 = right, -1 = left
       staticIcons: [], // Non-animation images like expIcon
       currentIcon: 0,  // Currently selected static icon index
       editMode: 'animation', // 'animation' or 'static'
@@ -818,15 +822,35 @@
       const w = dims.w;
       const h = dims.h;
       const scale = 3;
-      preview.width = w * scale;
+      
+      // Calculate canvas size with walk area if enabled
+      const walkRange = 20;
+      let canvasWidth = w * scale;
+      let offsetX = 0;
+      
+      if (state.walkEnabled && state.editMode === 'animation') {
+        canvasWidth = (w + walkRange) * scale;
+        offsetX = Math.round((state.walkPosition / 20) * walkRange) * scale;
+      }
+      
+      preview.width = canvasWidth;
       preview.height = h * scale;
       gp.fillStyle = '#0f1115';
       gp.fillRect(0, 0, preview.width, preview.height);
+      
+      // Draw walk area boundary if walk mode enabled
+      if (state.walkEnabled && state.editMode === 'animation') {
+        gp.strokeStyle = '#2a3140';
+        gp.setLineDash([2, 2]);
+        gp.strokeRect(0.5, 0.5, canvasWidth - 1, h * scale - 1);
+        gp.setLineDash([]);
+      }
+      
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
           if (pixels[y * w + x]) {
             gp.fillStyle = '#e5e9f0';
-            gp.fillRect(x * scale, y * scale, scale, scale);
+            gp.fillRect(x * scale + offsetX, y * scale, scale, scale);
           }
         }
       }
@@ -837,13 +861,37 @@
       if (frameIndex >= anim.frames.length) frameIndex = 0;
       const pixels = anim.frames[frameIndex];
       const scale = 3;
+      
+      // Calculate walk offset and canvas size
+      const walkRange = 20; // Total walk distance in pixels
+      let offsetX = 0;
+      let canvasWidth = state.w * scale;
+      let flipHorizontal = false;
+      
+      if (state.walkEnabled) {
+        canvasWidth = (state.w + walkRange) * scale;
+        offsetX = Math.round((state.walkPosition / 20) * walkRange) * scale;
+        flipHorizontal = state.walkDirection < 0;
+      }
+      
+      // Resize canvas if needed
+      if (preview.width !== canvasWidth || preview.height !== state.h * scale) {
+        preview.width = canvasWidth;
+        preview.height = state.h * scale;
+      }
+      
       gp.fillStyle = '#0f1115';
       gp.fillRect(0, 0, preview.width, preview.height);
+      
       for (let y = 0; y < state.h; y++) {
         for (let x = 0; x < state.w; x++) {
           if (pixels && pixels[y * state.w + x]) {
             gp.fillStyle = '#e5e9f0';
-            gp.fillRect(x * scale, y * scale, scale, scale);
+            // Flip horizontally when walking left
+            const drawX = flipHorizontal 
+              ? (state.w - 1 - x) * scale + offsetX 
+              : x * scale + offsetX;
+            gp.fillRect(drawX, y * scale, scale, scale);
           }
         }
       }
@@ -2165,6 +2213,20 @@
       state.playInterval = setInterval(() => {
         const anim = currentAnim();
         frame = (frame + 1) % anim.frames.length;
+        
+        // Update walk position if walk mode is enabled
+        if (state.walkEnabled) {
+          state.walkPosition += state.walkDirection * 2;
+          // Bounce at boundaries
+          if (state.walkPosition >= 20) {
+            state.walkPosition = 20;
+            state.walkDirection = -1;
+          } else if (state.walkPosition <= 0) {
+            state.walkPosition = 0;
+            state.walkDirection = 1;
+          }
+        }
+        
         drawAnimatedPreview(frame);
       }, state.speed);
     }
@@ -2483,6 +2545,19 @@
       // Playback
       $('#playBtn').onclick = playAnimation;
       $('#stopBtn').onclick = stopAnimation;
+      $('#walkBtn').onclick = () => {
+        state.walkEnabled = !state.walkEnabled;
+        $('#walkBtn').classList.toggle('active', state.walkEnabled);
+        if (!state.walkEnabled) {
+          // Reset walk position when disabled
+          state.walkPosition = 0;
+          state.walkDirection = 1;
+        }
+        // Redraw preview to show/hide walk area
+        if (!state.playing) {
+          drawPreview();
+        }
+      };
       $('#speedSlider').oninput = () => {
         state.speed = parseInt($('#speedSlider').value);
         if (state.playing) {
