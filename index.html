@@ -110,11 +110,11 @@
           <div class="controls" style="margin-top:10px">
             <div>
               <label>Width</label>
-              <input type="number" id="w" value="16" min="1" max="128"/>
+              <input type="number" id="w" value="16" min="1" max="480"/>
             </div>
             <div>
               <label>Height</label>
-              <input type="number" id="h" value="16" min="1" max="128"/>
+              <input type="number" id="h" value="16" min="1" max="480"/>
             </div>
           </div>
         </div>
@@ -142,7 +142,7 @@
             <span class="pill"><input id="dragToggle" type="checkbox" checked> <span>Drag draw</span></span>
           </div>
           <label>Zoom</label>
-          <input type="range" id="zoom" min="8" max="32" value="16"/>
+          <input type="range" id="zoom" min="1" max="32" value="16"/>
           <div style="height:8px"></div>
           <label>Bit Packing</label>
           <select id="bitOrder">
@@ -635,8 +635,8 @@
       const oldH = state.h;
       const oldPixels = state.pixels.slice();
       
-      state.w = Math.max(1, Math.min(128, w|0));
-      state.h = Math.max(1, Math.min(128, h|0));
+      state.w = Math.max(1, Math.min(480, w|0));
+      state.h = Math.max(1, Math.min(480, h|0));
       wIn.value = state.w; hIn.value = state.h;
       resizeCanvas();
       
